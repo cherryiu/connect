@@ -1,0 +1,52 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+
+  cloud:
+    gateway:
+      server:
+        webflux:
+          routes:
+            - id: users-service
+              uri: ${USERS_SERVICE_URI:http://localhost:8081}
+              predicates:
+                - Path=/api/users/**,/api/auth/**,/api/j_security_check
+              filters:
+                - StripPrefix=1
+
+            - id: hangouts-service
+              uri: ${HANGOUTS_SERVICE_URI:http://localhost:8082}
+              predicates:
+                - Path=/api/hangouts/**,/api/invites/**
+              filters:
+                - StripPrefix=1
+
+            # - id: location-service
+            #   uri: ${LOCATION_SERVICE_URI:http://localhost:8083}
+            #   predicates:
+            #     - Path=/api/locations/**
+            #   filters:
+            #     - StripPrefix=1
+
+            # - id: visit-journal-service
+            #   uri: http://localhost:8084
+            #   predicates:
+            #     - Path=/api/visits/**
+            #   filters:
+            #     - StripPrefix=1
+
+            # - id: notifications-service
+            #   uri: http://localhost:8085
+            #   predicates:
+            #     - Path=/api/notifications/**
+            #   filters:
+            #     - StripPrefix=1
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,gateway

@@ -1,0 +1,21 @@
+services:
+  mongodb:
+    image: mongo:7
+    container_name: coze-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - coze_mongo_data:/data/db
+
+  users-service:
+    build: .
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      QUARKUS_MONGODB_CONNECTION_STRING: mongodb://coze-mongodb:27017
+    depends_on:
+      - mongodb
+
+volumes:
+  coze_mongo_data:

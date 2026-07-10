@@ -1,0 +1,67 @@
+services:
+  ############
+  # DATABASE #
+  ############
+  mongodb:
+    image: mongo:7
+    container_name: coze-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - coze_mongo_data:/data/db
+
+  #############
+  #  GATEWAY  #
+  #############
+  api-gateway:
+    container_name: coze-api-gateway
+    build:
+      context: ./services/api-gateway
+      dockerfile: Dockerfile
+    # image: docker.io/library/spring-gateway:latest
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      USERS_SERVICE_URI: http://users-service:8081
+      HANGOUTS_SERVICE_URI: http://hangouts-service:8082
+      # LOCATION_SERVICE_URI: http://location-service:8083
+      # VISIT_JOURNAL_SERVICE_URI: http://visit-journal-service:8084
+      # NOTIFICATIONS_SERVICE_URI: http://notifications-service:8085
+    depends_on:
+      - users-service
+      - hangouts-service
+      # - location-service
+      # - visit-journal-service
+      # - notification-service
+
+  #############
+  #  SERVICES #
+  #############
+  users-service:
+    container_name: coze-users-service
+    build:
+      context: ./services/users-service
+      dockerfile: Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      QUARKUS_MONGODB_CONNECTION_STRING: mongodb://coze-mongodb:27017
+    depends_on:
+      - mongodb
+
+  hangouts-service:
+    container_name: coze-hangouts-service
+    build:
+      context: ./services/hangouts-service
+      dockerfile: Dockerfile
+    ports:
+      - "8082:8082"
+    environment:
+      QUARKUS_MONGODB_CONNECTION_STRING: mongodb://coze-mongodb:27017
+    depends_on:
+      - mongodb
+
+volumes:
+  coze_mongo_data:

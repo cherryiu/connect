@@ -1,0 +1,30 @@
+export const COLORS = {
+  primary: '#9C4141',
+  background: '#E2D9CE',
+  text: '#554241',
+  muted: '#887271',
+  mutedBorder: 'rgba(132, 165, 157, 0.22)',
+  brown: '#887271',
+  placeholder: '#DBC0BF',
+  yellow: '#F6BD60',
+  coral: '#F28482',
+  accent: '#F28482',
+  teal: '#84a59d',
+  tealDark: '#45645e',
+};
+
+// const COLORS = {
+//   background: '#fff8f3',
+//   surface: '#fff8f3',
+//   surfaceLow: '#fcf2e7',
+//   surfaceHigh: '#f0e7dc',
+//   text: '#1f1b14',
+//   muted: '#554241',
+//   mutedBorder: 'rgba(132, 165, 157, 0.22)',
+//   primary: '#9c4141',
+//   orange: '#f6bd60',
+//   coral: '#f28482',
+//   teal: '#84a59d',
+//   tealDark: '#45645e',
+//   white: '#ffffff',
+// };
