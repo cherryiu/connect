@@ -43,6 +43,13 @@ export async function addFriend(authUserId: string) {
   await API.post(`/api/users/friends/${encodeURIComponent(authUserId)}`);
 }
 
+export async function searchUsers(query: string) {
+  const response = await API.get<FriendProfile[]>('/api/users/search', {
+    params: { q: query.trim() },
+  });
+  return response.data;
+}
+
 export async function createUser(body: UserProfileRequest) {
   const response = await API.post<UserProfileResponse>('/api/users/register', body);
   return response.data;

@@ -3,33 +3,55 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { COLORS, FONTS } from '../../constants';
 
 type Props = {
+  activeItem?: NavItem;
+  onCalendar?: () => void;
   onCreate: () => void;
+  onFriends?: () => void;
+  onLogs?: () => void;
 };
 
-const navItems: { label: string; icon: string; active?: boolean }[] = [
+type NavItem = 'logs' | 'calendar' | 'friends';
+
+const navItems: { label: NavItem; icon: string }[] = [
   { label: 'logs', icon: 'ᝰ' },
-  { label: 'calendar', icon: '☑', active: true },
+  { label: 'calendar', icon: '☑' },
   { label: 'friends', icon: '𐀪𐀪' },
 ];
 
-export default function BottomNavBar({ onCreate }: Props) {
+export default function BottomNavBar({
+  activeItem = 'calendar',
+  onCalendar,
+  onCreate,
+  onFriends,
+  onLogs,
+}: Props) {
+  const actions: Partial<Record<NavItem, () => void>> = {
+    calendar: onCalendar,
+    friends: onFriends,
+    logs: onLogs,
+  };
+
   return (
     <View style={styles.container}>
-      {navItems.map((item) => (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityState={{ selected: item.active ?? false }}
-          key={item.label}
-          style={({ pressed }) => [
-            styles.item,
-            item.active && styles.activeItem,
-            pressed && styles.pressedItem,
-          ]}
-        >
-          <Text style={[styles.icon, item.active && styles.activeText]}>{item.icon}</Text>
-          <Text style={[styles.label, item.active && styles.activeText]}>{item.label}</Text>
-        </Pressable>
-      ))}
+      {navItems.map((item) => {
+        const active = item.label === activeItem;
+        return (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ selected: active }}
+            key={item.label}
+            onPress={actions[item.label]}
+            style={({ pressed }) => [
+              styles.item,
+              active && styles.activeItem,
+              pressed && styles.pressedItem,
+            ]}
+          >
+            <Text style={[styles.icon, active && styles.activeText]}>{item.icon}</Text>
+            <Text style={[styles.label, active && styles.activeText]}>{item.label}</Text>
+          </Pressable>
+        );
+      })}
 
       <Pressable
         accessibilityLabel="Create a hangout"

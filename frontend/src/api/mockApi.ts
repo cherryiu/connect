@@ -13,7 +13,8 @@ const MOCK_USER_ID = 'mock-user-1';
 let authenticated = false;
 let users: UserProfileResponse[] = [];
 let hangouts: Hangout[] = createSeedHangouts();
-const friends: FriendProfile[] = [
+let locationVisits: MockLocationVisit[] = [];
+let friends: FriendProfile[] = [
   {
     authUserId: 'mock-friend-ava',
     displayName: 'Ava Chen',
@@ -35,6 +36,31 @@ const friends: FriendProfile[] = [
     email: 'sage@coze.local',
   },
 ];
+
+const discoverableUsers: FriendProfile[] = [
+  {
+    authUserId: 'mock-user-jules',
+    displayName: 'Jules Martin',
+    email: 'jules@coze.local',
+  },
+  {
+    authUserId: 'mock-user-rina',
+    displayName: 'Rina Kim',
+    email: 'rina@coze.local',
+  },
+  {
+    authUserId: 'mock-user-theo',
+    displayName: 'Theo Williams',
+    email: 'theo@coze.local',
+  },
+];
+
+type MockLocationVisit = {
+  authHangoutId: string;
+  authUserId: string;
+  location: string;
+  visitedAt: string;
+};
 
 export function configureMockApi(api: AxiosInstance) {
   api.interceptors.request.use((config) => {
@@ -114,6 +140,94 @@ async function handleMockRequest(config: InternalAxiosRequestConfig) {
     return mockResponse(config, 200, friends);
   }
 
+  if (method === 'GET' && path === '/api/users/search') {
+    const query = String(config.params?.q ?? '')
+      .trim()
+      .toLowerCase();
+    const friendIds = new Set(friends.map((friend) => friend.authUserId));
+    const results = discoverableUsers.filter(
+      (user) =>
+        !friendIds.has(user.authUserId) &&
+        (user.displayName.toLowerCase().includes(query) ||
+          user.email.toLowerCase().includes(query)),
+    );
+    return mockResponse(config, 200, results);
+  }
+
+  const addFriendMatch = path.match(/^\/api\/users\/friends\/([^/]+)$/);
+  if (method === 'POST' && addFriendMatch) {
+    const friendId = decodeURIComponent(addFriendMatch[1]);
+    const friend = discoverableUsers.find((user) => user.authUserId === friendId);
+    if (!friend) return mockResponse(config, 404, { message: 'User not found' });
+    if (!friends.some((current) => current.authUserId === friendId)) {
+      friends = [...friends, friend];
+    }
+    return mockResponse(config, 204, null);
+  }
+
+  if (method === 'POST' && path === '/api/locations/visits/sync') {
+    const visitsBeforeSync = locationVisits.length;
+    const completedHangouts = hangouts.filter(
+      (hangout) => Date.parse(hangout.endTime) <= Date.now() && hangout.location.trim(),
+    );
+    for (const hangout of completedHangouts) {
+      for (const authUserId of new Set(hangout.participantAuthUserIds)) {
+        const exists = locationVisits.some(
+          (visit) =>
+            visit.authUserId === authUserId && visit.authHangoutId === hangout.authHangoutId,
+        );
+        if (!exists) {
+          locationVisits = [
+            ...locationVisits,
+            {
+              authHangoutId: hangout.authHangoutId,
+              authUserId,
+              location: hangout.location.trim(),
+              visitedAt: hangout.endTime,
+            },
+          ];
+        }
+      }
+    }
+    return mockResponse(config, 200, {
+      completedHangoutsProcessed: completedHangouts.length,
+      visitsRecorded: locationVisits.length - visitsBeforeSync,
+    });
+  }
+
+  const userVisitsMatch = path.match(/^\/api\/locations\/visits\/users\/([^/]+)$/);
+  if (method === 'GET' && userVisitsMatch) {
+    const authUserId = decodeURIComponent(userVisitsMatch[1]);
+    const visits = locationVisits.filter((visit) => visit.authUserId === authUserId);
+    return mockResponse(config, 200, summarizeLocationVisits(visits));
+  }
+
+  if (method === 'POST' && path === '/api/locations/visits/friends') {
+    const body = requestBody<{ location: string; friendAuthUserIds: string[] }>(config);
+    const locationKey = normalizeLocation(body.location);
+    const friendIds = new Set(body.friendAuthUserIds);
+    const matchingVisits = locationVisits.filter(
+      (visit) =>
+        friendIds.has(visit.authUserId) && normalizeLocation(visit.location) === locationKey,
+    );
+    const summaries = new Map<string, { visitCount: number; lastVisitedAt: string }>();
+    for (const visit of matchingVisits) {
+      const current = summaries.get(visit.authUserId);
+      summaries.set(visit.authUserId, {
+        visitCount: (current?.visitCount ?? 0) + 1,
+        lastVisitedAt:
+          !current || Date.parse(visit.visitedAt) > Date.parse(current.lastVisitedAt)
+            ? visit.visitedAt
+            : current.lastVisitedAt,
+      });
+    }
+    return mockResponse(
+      config,
+      200,
+      Array.from(summaries, ([authUserId, summary]) => ({ authUserId, ...summary })),
+    );
+  }
+
   if (method === 'DELETE' && path === '/api/users/delete') {
     authenticated = false;
     users = users.filter((user) => user.id !== MOCK_USER_ID);
@@ -184,6 +298,30 @@ async function handleMockRequest(config: InternalAxiosRequestConfig) {
 
 function requestBody<T>(config: InternalAxiosRequestConfig): T {
   return (typeof config.data === 'string' ? JSON.parse(config.data) : config.data) as T;
+}
+
+function summarizeLocationVisits(visits: MockLocationVisit[]) {
+  const summaries = new Map<
+    string,
+    { location: string; visitCount: number; lastVisitedAt: string }
+  >();
+  for (const visit of visits) {
+    const key = normalizeLocation(visit.location);
+    const current = summaries.get(key);
+    summaries.set(key, {
+      location: visit.location,
+      visitCount: (current?.visitCount ?? 0) + 1,
+      lastVisitedAt:
+        !current || Date.parse(visit.visitedAt) > Date.parse(current.lastVisitedAt)
+          ? visit.visitedAt
+          : current.lastVisitedAt,
+    });
+  }
+  return Array.from(summaries.values());
+}
+
+function normalizeLocation(location: string) {
+  return location.trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
 function mockResponse<T>(config: InternalAxiosRequestConfig, status: number, data: T) {

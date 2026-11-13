@@ -24,13 +24,23 @@ import {
   Hangout,
   joinHangout,
 } from '../api/hangoutsApi';
+import {
+  getFriendLocationVisits,
+  syncLocationVisits,
+  type FriendLocationVisit,
+} from '../api/locationApi';
+import { getFriends, type FriendProfile } from '../api/usersApi';
 import { COLORS, FONTS } from '../constants';
 import { useAuth } from '../context/AuthContext';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 
 import TopBar from '../components/bars/TopBar';
 import BottomNavBar from '../components/bars/BottomNavBar';
-import HangoutCard, { HangoutDateBadge } from '../components/scheduling/HangoutCard';
+import HangoutCard, {
+  HangoutDateBadge,
+  HangoutPassedBadge,
+  HangoutUpcomingBadge,
+} from '../components/scheduling/HangoutCard';
 
 type CalendarNavigation = NativeStackNavigationProp<RootStackParamList, 'ScrapbookCalendarScreen'>;
 
@@ -47,6 +57,7 @@ export default function ScrapbookCalendarScreen() {
   const [visibleMonth, setVisibleMonth] = useState(() => startOfMonth(new Date()));
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [hangouts, setHangouts] = useState<Hangout[]>([]);
+  const [friends, setFriends] = useState<FriendProfile[]>([]);
   const [selectedHangout, setSelectedHangout] = useState<Hangout | null>(null);
   const [showAll, setShowAll] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -67,8 +78,17 @@ export default function ScrapbookCalendarScreen() {
 
     try {
       setError(null);
-      const result = await getHangoutsForUser(user.authUserId);
+      const [hangoutResult, friendResult] = await Promise.allSettled([
+        getHangoutsForUser(user.authUserId),
+        getFriends(),
+      ]);
+      if (hangoutResult.status === 'rejected') throw hangoutResult.reason;
+      const result = hangoutResult.value;
       setHangouts(result.sort((a, b) => Date.parse(a.startTime) - Date.parse(b.startTime)));
+      if (friendResult.status === 'fulfilled') setFriends(friendResult.value);
+      // The scheduled backend sync handles this automatically. Triggering it
+      // here makes a just-completed hangout visible without waiting a minute.
+      void syncLocationVisits().catch(() => undefined);
     } catch {
       setError('Hangouts could not be refreshed. Pull down to try again.');
     } finally {
@@ -94,7 +114,9 @@ export default function ScrapbookCalendarScreen() {
   const upcomingHangouts = useMemo(() => {
     const now = new Date();
     const future = hangouts.filter((hangout) => new Date(hangout.endTime) >= now);
-    return showAll ? future : future.slice(0, 3);
+    return showAll
+      ? [...hangouts].sort((left, right) => Date.parse(right.startTime) - Date.parse(left.startTime))
+      : future.slice(0, 3);
   }, [hangouts, showAll]);
 
   const openHangoutForm = (hangout?: Hangout) => {
@@ -201,10 +223,15 @@ export default function ScrapbookCalendarScreen() {
           )}
         </ScrollView>
 
-        <BottomNavBar onCreate={() => openHangoutForm()} />
+        <BottomNavBar
+          onCreate={() => openHangoutForm()}
+          onFriends={() => navigation.navigate('FriendsScreen')}
+          onLogs={() => navigation.navigate('LogsScreen')}
+        />
 
         <HangoutDetailsModal
           currentUserId={user?.authUserId}
+          friends={friends}
           hangout={selectedHangout}
           onClose={() => setSelectedHangout(null)}
           onDelete={removeHangout}
@@ -277,6 +304,9 @@ function CalendarGrid({
       <View style={styles.calendarGrid}>
         {cells.map((cell) => {
           const dayHangouts = hangoutsByDay[dateKey(cell.date)] ?? [];
+          const allHangoutsPassed =
+            dayHangouts.length > 0 &&
+            dayHangouts.every((hangout) => Date.parse(hangout.endTime) < Date.now());
           const todayCell = sameDay(cell.date, today);
           const selectedCell = sameDay(cell.date, selectedDate);
           return (
@@ -290,7 +320,14 @@ function CalendarGrid({
                 todayCell && styles.todayCell,
               ]}
             >
-              {dayHangouts.length ? <Text style={styles.hangoutMarker}>♨</Text> : null}
+              {dayHangouts.length ? (
+                <Text
+                  accessibilityLabel={allHangoutsPassed ? 'Finished hangout' : 'Scheduled hangout'}
+                  style={[styles.hangoutMarker, allHangoutsPassed && styles.passedHangoutMarker]}
+                >
+                  ★
+                </Text>
+              ) : null}
               <Text
                 style={[
                   styles.dayNumber,
@@ -329,6 +366,7 @@ function EmptyHangouts({ onCreate }: { onCreate: () => void }) {
 
 function HangoutDetailsModal({
   currentUserId,
+  friends,
   hangout,
   onClose,
   onDelete,
@@ -336,6 +374,7 @@ function HangoutDetailsModal({
   onJoin,
 }: {
   currentUserId?: string | null;
+  friends: FriendProfile[];
   hangout: Hangout | null;
   onClose: () => void;
   onDelete: (hangout: Hangout) => Promise<void>;
@@ -344,6 +383,36 @@ function HangoutDetailsModal({
 }) {
   const [actionError, setActionError] = useState<string>();
   const [actionPending, setActionPending] = useState(false);
+  const [friendVisits, setFriendVisits] = useState<FriendLocationVisit[]>([]);
+  const [friendVisitsLoading, setFriendVisitsLoading] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    setFriendVisits([]);
+    if (!hangout?.location.trim() || friends.length === 0) return () => undefined;
+
+    const loadFriendVisits = async () => {
+      try {
+        setFriendVisitsLoading(true);
+        await syncLocationVisits();
+        const visits = await getFriendLocationVisits(
+          hangout.location,
+          friends.map((friend) => friend.authUserId),
+        );
+        if (active) setFriendVisits(visits);
+      } catch {
+        if (active) setFriendVisits([]);
+      } finally {
+        if (active) setFriendVisitsLoading(false);
+      }
+    };
+
+    void loadFriendVisits();
+    return () => {
+      active = false;
+    };
+  }, [friends, hangout?.location]);
+
   if (!hangout) return null;
 
   const isParticipant = Boolean(
@@ -404,7 +473,11 @@ function HangoutDetailsModal({
             >
               <Text style={styles.modalCloseText}>×</Text>
             </Pressable>
-            <HangoutDateBadge startTime={hangout.startTime} />
+            <View style={styles.modalBadgeRow}>
+              <HangoutDateBadge startTime={hangout.startTime} />
+              <HangoutPassedBadge endTime={hangout.endTime} />
+              <HangoutUpcomingBadge startTime={hangout.startTime} />
+            </View>
             <Text style={styles.modalTitle}>{hangout.hangoutName}</Text>
             <Text style={styles.modalMetadata}>
               ❤︎ {hangout.participantAuthUserIds.length} GOING
@@ -428,6 +501,24 @@ function HangoutDetailsModal({
             <Text numberOfLines={2} style={styles.modalMetadata}>
               🌐︎ {hangout.location || 'LOCATION TBD'}
             </Text>
+            {friendVisitsLoading ? (
+              <Text style={styles.locationHistoryLoading}>CHECKING FRIEND HISTORY...</Text>
+            ) : friendVisits.length ? (
+              <View style={styles.locationHistory}>
+                <Text style={styles.locationHistoryTitle}>✧ FRIENDS WHO HAVE BEEN HERE</Text>
+                {friendVisits.map((visit) => {
+                  const friend = friends.find(
+                    (candidate) => candidate.authUserId === visit.authUserId,
+                  );
+                  return (
+                    <Text key={visit.authUserId} style={styles.locationHistoryText}>
+                      {friend?.displayName ?? 'A friend'} · {visit.visitCount}{' '}
+                      {visit.visitCount === 1 ? 'visit' : 'visits'}
+                    </Text>
+                  );
+                })}
+              </View>
+            ) : null}
             <Text style={styles.modalMetadata}>{isHost ? 'ツ HOSTED BY YOU' : 'ツ FRIEND HANG'}</Text>
 
             {isInvited ? <Text style={styles.inviteNotice}>YOU ARE INVITED</Text> : null}
@@ -607,6 +698,7 @@ const styles = StyleSheet.create({
   todayNumber: { fontWeight: '800' },
   outsideMonth: { color: 'rgba(85, 66, 65, 0.28)' },
   hangoutMarker: { color: COLORS.teal, fontSize: 12, position: 'absolute', right: 3, top: 2 },
+  passedHangoutMarker: { color: COLORS.primary, opacity: 0.55 },
   hangoutCount: {
     bottom: 1,
     color: COLORS.primary,
@@ -729,6 +821,12 @@ const styles = StyleSheet.create({
     marginTop: 12,
     textTransform: 'lowercase',
   },
+  modalBadgeRow: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
   modalMetadata: {
     color: COLORS.text,
     fontFamily: FONTS.primary,
@@ -736,6 +834,32 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
     lineHeight: 23,
     textTransform: 'uppercase',
+  },
+  locationHistory: {
+    backgroundColor: 'rgba(132,165,157,0.12)',
+    borderColor: COLORS.teal,
+    borderWidth: 1,
+    marginBottom: 12,
+    padding: 10,
+  },
+  locationHistoryTitle: {
+    color: COLORS.tealDark,
+    fontFamily: FONTS.primaryBold,
+    fontSize: 9,
+    letterSpacing: 0.6,
+    marginBottom: 6,
+  },
+  locationHistoryText: {
+    color: COLORS.text,
+    fontFamily: FONTS.primary,
+    fontSize: 10,
+    lineHeight: 16,
+  },
+  locationHistoryLoading: {
+    color: COLORS.muted,
+    fontFamily: FONTS.primary,
+    fontSize: 9,
+    marginBottom: 12,
   },
   participantGrid: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 14, marginTop: 12 },
   participant: { alignItems: 'center', flexDirection: 'row', marginBottom: 8, width: '50%' },

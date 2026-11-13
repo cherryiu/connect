@@ -1,40 +1,61 @@
 package com.cherryiu.location.api;
 
-import com.cherryiu.location.dto.LocationRequest;
+import com.cherryiu.location.businesslogic.LocationBusinessLogic;
+import com.cherryiu.location.dto.FriendLocationVisitRequest;
+import com.cherryiu.location.dto.FriendLocationVisitResponse;
+import com.cherryiu.location.dto.LocationVisitSummary;
+import com.cherryiu.location.dto.VisitSyncResponse;
 
 import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
-import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.MediaType;
+import jakarta.inject.Inject;
+import jakarta.validation.Valid;
+import org.eclipse.microprofile.openapi.annotations.Operation;
+
+import java.util.List;
 
 @Path("/locations")
 @Consumes(MediaType.APPLICATION_JSON)
 @Produces(MediaType.APPLICATION_JSON)
 public class LocationResource {
 
-    @POST
+    @Inject
+    LocationBusinessLogic locationBusinessLogic;
+
+    @GET
     @Path("/ping")
     @Produces(MediaType.TEXT_PLAIN)
     public String ping() {
         return "location-service is running";
-    }   
+    }
 
-    
+    @POST
+    @Path("/visits/sync")
+    @Operation(summary = "Record visits from completed hangouts")
+    public VisitSyncResponse syncCompletedHangouts() {
+        return locationBusinessLogic.syncCompletedHangouts();
+    }
 
+    @GET
+    @Path("/visits/users/{authUserId}")
+    @Operation(summary = "Get a user's visit counts grouped by location")
+    public List<LocationVisitSummary> getUserVisits(
+            @PathParam("authUserId") String authUserId
+    ) {
+        return locationBusinessLogic.getUserVisits(authUserId);
+    }
 
-    // @POST
-    // @Path("/save")
-    // public Response saveLocation(LocationRequest request) {
-    //     // 1. Get authenticated user ID
-    //     // 2. Validate location
-    //     // 3. Save to MongoDB
-    //     // 4. Return response
-    //     return Response.status(Response.Status.CREATED).build();
-    // }
-
-
-
-    
+    @POST
+    @Path("/visits/friends")
+    @Operation(summary = "Find friends who have visited a location")
+    public List<FriendLocationVisitResponse> getFriendVisits(
+            @Valid FriendLocationVisitRequest request
+    ) {
+        return locationBusinessLogic.getFriendVisits(request);
+    }
 }

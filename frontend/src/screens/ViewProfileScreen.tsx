@@ -17,6 +17,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { getHangoutsForUser, type Hangout } from '../api/hangoutsApi';
 import {
+  getUserLocationVisits,
+  syncLocationVisits,
+  type LocationVisitSummary,
+} from '../api/locationApi';
+import {
   getCurrentUser,
   deleteCurrentUser,
   getFriends,
@@ -35,6 +40,7 @@ export default function ViewProfileScreen() {
   const [profile, setProfile] = useState<UserProfileResponse>();
   const [friends, setFriends] = useState<FriendProfile[]>([]);
   const [hangouts, setHangouts] = useState<Hangout[]>([]);
+  const [places, setPlaces] = useState<LocationVisitSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showFriends, setShowFriends] = useState(false);
@@ -52,18 +58,24 @@ export default function ViewProfileScreen() {
       setRefreshing(false);
       return;
     }
+    const authUserId = user.authUserId;
 
-    const [profileResult, friendsResult, hangoutsResult] = await Promise.allSettled([
+    const visitRequest = syncLocationVisits()
+      .catch(() => undefined)
+      .then(() => getUserLocationVisits(authUserId));
+    const [profileResult, friendsResult, hangoutsResult, visitsResult] = await Promise.allSettled([
       getCurrentUser(),
       getFriends(),
-      getHangoutsForUser(user.authUserId),
+      getHangoutsForUser(authUserId),
+      visitRequest,
     ]);
 
     if (profileResult.status === 'fulfilled') setProfile(profileResult.value);
     if (friendsResult.status === 'fulfilled') setFriends(friendsResult.value);
     if (hangoutsResult.status === 'fulfilled') setHangouts(hangoutsResult.value);
+    if (visitsResult.status === 'fulfilled') setPlaces(visitsResult.value);
 
-    const failed = [profileResult, friendsResult, hangoutsResult].some(
+    const failed = [profileResult, friendsResult, hangoutsResult, visitsResult].some(
       (result) => result.status === 'rejected',
     );
     setError(failed ? 'Some profile details could not be refreshed.' : undefined);
@@ -181,6 +193,12 @@ export default function ViewProfileScreen() {
           </Text>
           <Text style={styles.bio}>{bio}</Text>
 
+          <PlacesVisitedBox
+            loading={loading}
+            onPress={() => navigation.navigate('LogsScreen')}
+            places={places}
+          />
+
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
           <View style={styles.actions}>
@@ -222,6 +240,40 @@ export default function ViewProfileScreen() {
         </ScrollView>
       </View>
     </SafeAreaView>
+  );
+}
+
+function PlacesVisitedBox({
+  loading,
+  onPress,
+  places,
+}: {
+  loading: boolean;
+  onPress: () => void;
+  places: LocationVisitSummary[];
+}) {
+  const totalVisits = places.reduce((total, place) => total + place.visitCount, 0);
+
+  return (
+    <Pressable
+      accessibilityHint="Opens your visited place logs"
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [styles.placesBox, pressed && styles.pressed]}
+    >
+      <View>
+        <Text style={styles.placesLabel}>PLACES VISITED</Text>
+        {loading ? (
+          <ActivityIndicator color={COLORS.tealDark} size="small" style={styles.placesLoader} />
+        ) : (
+          <Text style={styles.placesCount}>
+            {places.length} {places.length === 1 ? 'place' : 'places'} · {totalVisits}{' '}
+            {totalVisits === 1 ? 'visit' : 'visits'}
+          </Text>
+        )}
+      </View>
+      <Text style={styles.placesArrow}>→</Text>
+    </Pressable>
   );
 }
 
@@ -346,6 +398,32 @@ const styles = StyleSheet.create({
     marginBottom: 28,
     marginTop: 3,
   },
+  placesBox: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(132,165,157,0.12)',
+    borderColor: COLORS.tealDark,
+    borderWidth: 1.5,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 22,
+    minHeight: 76,
+    paddingHorizontal: 16,
+    paddingVertical: 13,
+  },
+  placesLabel: {
+    color: COLORS.tealDark,
+    fontFamily: FONTS.primaryBold,
+    fontSize: 10,
+    letterSpacing: 1,
+  },
+  placesCount: {
+    color: COLORS.black,
+    fontFamily: FONTS.secondary,
+    fontSize: 15,
+    marginTop: 6,
+  },
+  placesLoader: { alignSelf: 'flex-start', marginTop: 7 },
+  placesArrow: { color: COLORS.primary, fontFamily: FONTS.primary, fontSize: 24 },
   error: {
     backgroundColor: 'rgba(156,65,65,0.10)',
     color: COLORS.primary,

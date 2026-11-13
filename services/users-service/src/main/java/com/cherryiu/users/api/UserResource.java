@@ -13,6 +13,7 @@ import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
@@ -52,6 +53,13 @@ public class UserResource {
     @Operation(summary = "Get the current user's friends")
     public Response getFriends() {
         return Response.ok(userBusinessLogic.getFriends(currentUserId())).build();
+    }
+
+    @GET
+    @Path("/search")
+    @Operation(summary = "Search for users who are not already friends")
+    public Response searchUsers(@QueryParam("q") String query) {
+        return Response.ok(userBusinessLogic.searchUsers(currentUserId(), query)).build();
     }
 
     @POST

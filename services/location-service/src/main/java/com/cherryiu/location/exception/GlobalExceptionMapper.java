@@ -1,6 +1,8 @@
 package com.cherryiu.location.exception;
 
 import jakarta.ws.rs.BadRequestException;
+import jakarta.ws.rs.WebApplicationException;
+import jakarta.validation.ConstraintViolationException;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.ext.ExceptionMapper;
 import jakarta.ws.rs.ext.Provider;
@@ -14,15 +16,17 @@ public class GlobalExceptionMapper implements ExceptionMapper<RuntimeException> 
     @Override
     public Response toResponse(RuntimeException exception) {
 
-        if (exception instanceof HangoutNotFoundException) {
-            return Response.status(Response.Status.NOT_FOUND)
-                    .entity(error("NOT_FOUND", exception.getMessage()))
+        if (exception instanceof IllegalArgumentException
+                || exception instanceof BadRequestException
+                || exception instanceof ConstraintViolationException) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(error("BAD_REQUEST", exception.getMessage()))
                     .build();
         }
 
-        if (exception instanceof IllegalArgumentException || exception instanceof BadRequestException) {
-            return Response.status(Response.Status.BAD_REQUEST)
-                    .entity(error("BAD_REQUEST", exception.getMessage()))
+        if (exception instanceof WebApplicationException webException) {
+            return Response.status(webException.getResponse().getStatus())
+                    .entity(error("REQUEST_FAILED", exception.getMessage()))
                     .build();
         }
 
