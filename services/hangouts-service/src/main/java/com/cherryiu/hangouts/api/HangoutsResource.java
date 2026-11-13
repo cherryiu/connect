@@ -5,6 +5,7 @@ import com.cherryiu.hangouts.dto.HangoutModelRequest;
 import com.cherryiu.hangouts.dto.HangoutModelResponse;
 
 import jakarta.inject.Inject;
+import jakarta.validation.Valid;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
@@ -57,7 +58,7 @@ public class HangoutsResource {
     @Operation(summary = "Create a hangout")
     public Response createHangout(
             @PathParam("authHangoutId") String authHangoutId,
-            HangoutModelRequest request
+            @Valid HangoutModelRequest request
     ) {
         HangoutModelResponse response = hangoutBusinessLogic.createHangout(authHangoutId, request);
         return Response.status(Response.Status.CREATED).entity(response).build();
@@ -68,7 +69,7 @@ public class HangoutsResource {
     @Operation(summary = "Update a hangout")
     public HangoutModelResponse updateHangout(
             @PathParam("authHangoutId") String authHangoutId,
-            HangoutModelRequest request
+            @Valid HangoutModelRequest request
     ) {
         return hangoutBusinessLogic.updateHangout(authHangoutId, request);
     }
@@ -79,5 +80,25 @@ public class HangoutsResource {
     public Response deleteHangout(@PathParam("authHangoutId") String authHangoutId) {
         hangoutBusinessLogic.deleteHangout(authHangoutId);
         return Response.noContent().build();
+    }
+
+    @POST
+    @Path("/{authHangoutId}/invitations/{authUserId}")
+    @Operation(summary = "Invite a user to a hangout")
+    public HangoutModelResponse inviteUser(
+            @PathParam("authHangoutId") String authHangoutId,
+            @PathParam("authUserId") String authUserId
+    ) {
+        return hangoutBusinessLogic.inviteUser(authHangoutId, authUserId);
+    }
+
+    @POST
+    @Path("/{authHangoutId}/join/{authUserId}")
+    @Operation(summary = "Accept an invitation or join an open hangout")
+    public HangoutModelResponse joinHangout(
+            @PathParam("authHangoutId") String authHangoutId,
+            @PathParam("authUserId") String authUserId
+    ) {
+        return hangoutBusinessLogic.joinHangout(authHangoutId, authUserId);
     }
 }

@@ -19,6 +19,7 @@ public class HangoutMapper {
                 model.id.toString(),
                 model.authHangoutId.toString(),
                 toStringIdList(model.participantAuthUserIds),
+                toStringIdList(model.invitedAuthUserIds),
                 model.hangoutName,
                 model.location,
                 toInstant(model.startTime),
@@ -32,11 +33,12 @@ public class HangoutMapper {
 
     public void applyRequest(HangoutModel model, HangoutModelRequest request) {
         model.participantAuthUserIds = toObjectIdList(request.participantAuthUserIds());
-        model.hangoutName = request.hangoutName();
-        model.location = request.location();
+        model.invitedAuthUserIds = toObjectIdList(request.invitedAuthUserIds());
+        model.hangoutName = request.hangoutName().trim();
+        model.location = trimToEmpty(request.location());
         model.startTime = toDate(request.startTime());
         model.endTime = toDate(request.endTime());
-        model.description = request.description();
+        model.description = trimToEmpty(request.description());
         model.isOpen = request.isOpen();
         model.updatedAt = Instant.now();
     }
@@ -72,5 +74,9 @@ public class HangoutMapper {
 
     private Date toDate(Instant instant) {
         return instant == null ? null : Date.from(instant);
+    }
+
+    private String trimToEmpty(String value) {
+        return value == null ? "" : value.trim();
     }
 }

@@ -63,10 +63,7 @@ export default function HangoutFormScreen() {
   const route = useRoute<HangoutFormRoute>();
   const existing = route.params?.hangout;
   const { user } = useAuth();
-  const initial = useMemo(
-    () => getInitialValues(existing, user?.authUserId),
-    [existing, user?.authUserId],
-  );
+  const initial = useMemo(() => getInitialValues(existing), [existing]);
   const [friends, setFriends] = useState<FriendProfile[]>([]);
   const [friendsLoading, setFriendsLoading] = useState(true);
   const [friendsError, setFriendsError] = useState<string>();
@@ -101,11 +98,14 @@ export default function HangoutFormScreen() {
       return;
     }
 
-    const participantIds = Array.from(
-      new Set([user?.authUserId, ...values.friendAuthUserIds].filter(isString)),
-    );
+    const participantIds = existing
+      ? existing.participantAuthUserIds
+      : [user?.authUserId].filter(isString);
     const body: HangoutRequest = {
       participantAuthUserIds: participantIds,
+      invitedAuthUserIds: values.friendAuthUserIds.filter(
+        (authUserId) => !participantIds.includes(authUserId),
+      ),
       hangoutName: values.name.trim(),
       location: values.location.trim(),
       startTime: start.toISOString(),
@@ -286,7 +286,7 @@ export default function HangoutFormScreen() {
   );
 }
 
-function getInitialValues(existing?: Hangout, currentUserId?: string | null) {
+function getInitialValues(existing?: Hangout) {
   const start = existing ? new Date(existing.startTime) : tomorrowAt(15);
   const end = existing ? new Date(existing.endTime) : tomorrowAt(17);
   return {
@@ -296,9 +296,7 @@ function getInitialValues(existing?: Hangout, currentUserId?: string | null) {
     startTime: formatInputTime(start),
     endTime: formatInputTime(end),
     description: existing?.description ?? '',
-    friendAuthUserIds:
-      existing?.participantAuthUserIds.filter((participantId) => participantId !== currentUserId) ??
-      [],
+    friendAuthUserIds: existing?.invitedAuthUserIds ?? [],
     isOpen: existing?.isOpen ?? true,
   };
 }

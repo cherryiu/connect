@@ -64,6 +64,14 @@ describeBackend('real backend MVP flow', () => {
     });
     authUserId = registration.data.id;
     expect(authUserId).toMatch(/^[0-9a-f]{24}$/i);
+    await expect(
+      client.post('/api/users/register', {
+        displayName: 'Duplicate User',
+        email: email.toUpperCase(),
+        password,
+        role: 'USER',
+      }),
+    ).rejects.toMatchObject({ response: { status: 409 } });
 
     const friendRegistration = await client.post('/api/users/register', {
       avatarUrl: null,
@@ -88,6 +96,19 @@ describeBackend('real backend MVP flow', () => {
       email,
     });
 
+    await expect(
+      client.post(`/api/hangouts/${objectId()}/create`, {
+        description: '',
+        endTime: '2026-01-01T10:00:00.000Z',
+        hangoutName: '',
+        isOpen: false,
+        invitedAuthUserIds: [],
+        location: '',
+        participantAuthUserIds: [authUserId],
+        startTime: '2026-01-01T11:00:00.000Z',
+      }),
+    ).rejects.toMatchObject({ response: { status: 400 } });
+
     await client.post(`/api/users/friends/${friendAuthUserId}`, undefined, {
       headers: { Cookie: sessionCookie },
     });
@@ -106,12 +127,22 @@ describeBackend('real backend MVP flow', () => {
       endTime: endTime.toISOString(),
       hangoutName: 'integration hangout',
       isOpen: true,
+      invitedAuthUserIds: [friendAuthUserId],
       location: 'Integration Test',
       participantAuthUserIds: [authUserId],
       startTime: startTime.toISOString(),
     });
     hangoutCreated = true;
     expect(created.data.authHangoutId).toBe(authHangoutId);
+
+    const invitedCalendar = await client.get(`/api/hangouts/user/${friendAuthUserId}`);
+    expect(invitedCalendar.data).toEqual(
+      expect.arrayContaining([expect.objectContaining({ authHangoutId })]),
+    );
+
+    const joined = await client.post(`/api/hangouts/${authHangoutId}/join/${friendAuthUserId}`);
+    expect(joined.data.participantAuthUserIds).toContain(friendAuthUserId);
+    expect(joined.data.invitedAuthUserIds).not.toContain(friendAuthUserId);
 
     const calendar = await client.get(`/api/hangouts/user/${authUserId}`);
     expect(calendar.data).toEqual(

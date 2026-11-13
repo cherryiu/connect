@@ -4,6 +4,7 @@ export type Hangout = {
   id: string;
   authHangoutId: string;
   participantAuthUserIds: string[];
+  invitedAuthUserIds: string[];
   hangoutName: string;
   location: string;
   startTime: string;
@@ -17,6 +18,7 @@ export type Hangout = {
 export type HangoutRequest = Pick<
   Hangout,
   | 'participantAuthUserIds'
+  | 'invitedAuthUserIds'
   | 'hangoutName'
   | 'location'
   | 'startTime'
@@ -38,6 +40,24 @@ export async function createHangout(body: HangoutRequest) {
 
 export async function updateHangout(authHangoutId: string, body: HangoutRequest) {
   const response = await API.put<Hangout>(`/api/hangouts/${authHangoutId}/update`, body);
+  return response.data;
+}
+
+export async function deleteHangout(authHangoutId: string) {
+  await API.delete(`/api/hangouts/${authHangoutId}/delete`);
+}
+
+export async function inviteToHangout(authHangoutId: string, authUserId: string) {
+  const response = await API.post<Hangout>(
+    `/api/hangouts/${authHangoutId}/invitations/${encodeURIComponent(authUserId)}`,
+  );
+  return response.data;
+}
+
+export async function joinHangout(authHangoutId: string, authUserId: string) {
+  const response = await API.post<Hangout>(
+    `/api/hangouts/${authHangoutId}/join/${encodeURIComponent(authUserId)}`,
+  );
   return response.data;
 }
 

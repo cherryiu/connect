@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Linking,
   Modal,
   Pressable,
@@ -17,7 +18,12 @@ import { BlurView } from 'expo-blur';
 import { GlassView } from 'expo-glass-effect';
 import { LinearGradient } from 'expo-linear-gradient';
 
-import { getHangoutsForUser, Hangout } from '../api/hangoutsApi';
+import {
+  deleteHangout,
+  getHangoutsForUser,
+  Hangout,
+  joinHangout,
+} from '../api/hangoutsApi';
 import { COLORS, FONTS } from '../constants';
 import { useAuth } from '../context/AuthContext';
 import type { RootStackParamList } from '../navigation/RootNavigator';
@@ -93,6 +99,21 @@ export default function ScrapbookCalendarScreen() {
 
   const openHangoutForm = (hangout?: Hangout) => {
     navigation.navigate('HangoutForm', hangout ? { hangout } : undefined);
+  };
+
+  const removeHangout = async (hangout: Hangout) => {
+    await deleteHangout(hangout.authHangoutId);
+    setHangouts((current) => current.filter((item) => item.authHangoutId !== hangout.authHangoutId));
+    setSelectedHangout(null);
+  };
+
+  const joinSelectedHangout = async (hangout: Hangout) => {
+    if (!user?.authUserId) return;
+    const updated = await joinHangout(hangout.authHangoutId, user.authUserId);
+    setHangouts((current) =>
+      current.map((item) => (item.authHangoutId === updated.authHangoutId ? updated : item)),
+    );
+    setSelectedHangout(updated);
   };
 
   const selectDay = (date: Date) => {
@@ -186,10 +207,12 @@ export default function ScrapbookCalendarScreen() {
           currentUserId={user?.authUserId}
           hangout={selectedHangout}
           onClose={() => setSelectedHangout(null)}
+          onDelete={removeHangout}
           onEdit={(hangout) => {
             setSelectedHangout(null);
             openHangoutForm(hangout);
           }}
+          onJoin={joinSelectedHangout}
         />
       </View>
 
@@ -308,14 +331,50 @@ function HangoutDetailsModal({
   currentUserId,
   hangout,
   onClose,
+  onDelete,
   onEdit,
+  onJoin,
 }: {
   currentUserId?: string | null;
   hangout: Hangout | null;
   onClose: () => void;
+  onDelete: (hangout: Hangout) => Promise<void>;
   onEdit: (hangout: Hangout) => void;
+  onJoin: (hangout: Hangout) => Promise<void>;
 }) {
+  const [actionError, setActionError] = useState<string>();
+  const [actionPending, setActionPending] = useState(false);
   if (!hangout) return null;
+
+  const isParticipant = Boolean(
+    currentUserId && hangout.participantAuthUserIds.includes(currentUserId),
+  );
+  const isInvited = Boolean(currentUserId && hangout.invitedAuthUserIds.includes(currentUserId));
+  const isHost = hangout.participantAuthUserIds[0] === currentUserId;
+
+  const runAction = async (action: () => Promise<void>, failureMessage: string) => {
+    try {
+      setActionError(undefined);
+      setActionPending(true);
+      await action();
+    } catch {
+      setActionError(failureMessage);
+    } finally {
+      setActionPending(false);
+    }
+  };
+
+  const confirmDelete = () => {
+    Alert.alert('Delete hangout?', 'This cannot be undone.', [
+      { style: 'cancel', text: 'Cancel' },
+      {
+        style: 'destructive',
+        text: 'Delete',
+        onPress: () =>
+          void runAction(() => onDelete(hangout), 'The hangout could not be deleted.'),
+      },
+    ]);
+  };
 
   const openDirections = async () => {
     const query = encodeURIComponent(hangout.location);
@@ -369,16 +428,40 @@ function HangoutDetailsModal({
             <Text numberOfLines={2} style={styles.modalMetadata}>
               🌐︎ {hangout.location || 'LOCATION TBD'}
             </Text>
-            <Text style={styles.modalMetadata}>ツ HOSTED BY YOU</Text>
+            <Text style={styles.modalMetadata}>{isHost ? 'ツ HOSTED BY YOU' : 'ツ FRIEND HANG'}</Text>
+
+            {isInvited ? <Text style={styles.inviteNotice}>YOU ARE INVITED</Text> : null}
+            {actionError ? <Text style={styles.errorBanner}>{actionError}</Text> : null}
 
             <View style={styles.modalActions}>
               <Pressable onPress={() => void openDirections()} style={styles.primaryAction}>
                 <Text style={styles.primaryActionText}>DIRECTIONS</Text>
               </Pressable>
-              <Pressable onPress={() => onEdit(hangout)} style={styles.secondaryAction}>
-                <Text style={styles.secondaryActionText}>EDIT HANG</Text>
-              </Pressable>
+              {isHost ? (
+                <Pressable onPress={() => onEdit(hangout)} style={styles.secondaryAction}>
+                  <Text style={styles.secondaryActionText}>EDIT HANG</Text>
+                </Pressable>
+              ) : !isParticipant && (isInvited || hangout.isOpen) ? (
+                <Pressable
+                  disabled={actionPending}
+                  onPress={() =>
+                    void runAction(() => onJoin(hangout), 'The hangout could not be joined.')
+                  }
+                  style={styles.secondaryAction}
+                >
+                  <Text style={styles.secondaryActionText}>
+                    {actionPending ? 'JOINING...' : isInvited ? 'ACCEPT INVITE' : 'JOIN HANG'}
+                  </Text>
+                </Pressable>
+              ) : null}
             </View>
+            {isHost ? (
+              <Pressable disabled={actionPending} onPress={confirmDelete} style={styles.deleteAction}>
+                <Text style={styles.deleteActionText}>
+                  {actionPending ? 'DELETING...' : 'DELETE HANG'}
+                </Text>
+              </Pressable>
+            ) : null}
           </GlassView>
         </View>
       </View>
@@ -681,6 +764,12 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   modalActions: { flexDirection: 'row', marginTop: 18 },
+  inviteNotice: {
+    color: COLORS.tealDark,
+    fontFamily: FONTS.primaryBold,
+    fontSize: 11,
+    marginTop: 10,
+  },
   primaryAction: {
     alignItems: 'center',
     backgroundColor: COLORS.primary,
@@ -709,5 +798,12 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.primary,
     fontSize: 11,
     fontWeight: '700',
+  },
+  deleteAction: { alignItems: 'center', marginTop: 12, paddingVertical: 8 },
+  deleteActionText: {
+    color: COLORS.primary,
+    fontFamily: FONTS.primaryBold,
+    fontSize: 10,
+    letterSpacing: 0.8,
   },
 });

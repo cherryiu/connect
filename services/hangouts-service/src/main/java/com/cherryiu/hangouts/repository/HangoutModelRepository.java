@@ -18,4 +18,12 @@ public class HangoutModelRepository implements PanacheMongoRepository<HangoutMod
     public List<HangoutModel> findByParticipantAuthUserId(ObjectId participantAuthUserId) {
         return find("participantAuthUserIds", participantAuthUserId).list();
     }
+
+    public List<HangoutModel> findByInvitedAuthUserId(ObjectId invitedAuthUserId) {
+        return find("invitedAuthUserIds", invitedAuthUserId).list();
+    }
+
+    public List<HangoutModel> findOpen() {
+        return find("isOpen", true).list();
+    }
 }

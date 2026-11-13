@@ -12,7 +12,8 @@ import java.util.Date;
 public class HangoutModel extends PanacheMongoEntity {
 
     public ObjectId authHangoutId;
-    public ArrayList<ObjectId> participantAuthUserIds;
+    public ArrayList<ObjectId> participantAuthUserIds = new ArrayList<>();
+    public ArrayList<ObjectId> invitedAuthUserIds = new ArrayList<>();
     public String hangoutName;
     public String location;
     public Date startTime;
@@ -20,6 +21,6 @@ public class HangoutModel extends PanacheMongoEntity {
     public String description;
     public Boolean isOpen;
     public Instant createdAt;
-    public Instant updatedAt; 
+    public Instant updatedAt;
     
 }

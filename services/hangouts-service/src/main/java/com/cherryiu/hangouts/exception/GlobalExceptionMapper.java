@@ -1,6 +1,8 @@
 package com.cherryiu.hangouts.exception;
 
 import jakarta.ws.rs.BadRequestException;
+import jakarta.ws.rs.ClientErrorException;
+import jakarta.validation.ConstraintViolationException;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.ext.ExceptionMapper;
 import jakarta.ws.rs.ext.Provider;
@@ -23,6 +25,18 @@ public class GlobalExceptionMapper implements ExceptionMapper<RuntimeException> 
         if (exception instanceof IllegalArgumentException || exception instanceof BadRequestException) {
             return Response.status(Response.Status.BAD_REQUEST)
                     .entity(error("BAD_REQUEST", exception.getMessage()))
+                    .build();
+        }
+
+        if (exception instanceof ConstraintViolationException) {
+            return Response.status(Response.Status.BAD_REQUEST)
+                    .entity(error("VALIDATION_ERROR", "Request validation failed."))
+                    .build();
+        }
+
+        if (exception instanceof ClientErrorException clientError) {
+            return Response.status(clientError.getResponse().getStatus())
+                    .entity(error("REQUEST_REJECTED", exception.getMessage()))
                     .build();
         }
 

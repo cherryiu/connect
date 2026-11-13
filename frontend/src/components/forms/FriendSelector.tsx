@@ -14,7 +14,7 @@ type Props = {
 export default function FriendSelector({ error, friends, loading, onToggle, selectedIds }: Props) {
   return (
     <View style={styles.field}>
-      <Text style={styles.label}>ADD FRIENDS</Text>
+      <Text style={styles.label}>INVITE FRIENDS</Text>
       <View style={styles.list}>
         {loading ? (
           <View style={styles.messageRow}>

@@ -7,6 +7,7 @@ import io.quarkus.security.UnauthorizedException;
 import io.quarkus.security.identity.SecurityIdentity;
 import jakarta.annotation.security.PermitAll;
 import jakarta.inject.Inject;
+import jakarta.validation.Valid;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
@@ -65,7 +66,7 @@ public class UserResource {
     @PermitAll
     @Path("/register")
     @Operation(summary = "Create a user profile")
-    public Response createProfile(UserProfileRequest request) {
+    public Response createProfile(@Valid UserProfileRequest request) {
         UserProfileResponse response = userBusinessLogic.createProfile(request);
         return Response.status(Response.Status.CREATED).entity(response).build();
     }
@@ -73,7 +74,7 @@ public class UserResource {
     @PUT
     @Path("/update")
     @Operation(summary = "Update the current user profile")
-    public UserProfileResponse updateProfile(UserProfileRequest request) {
+    public UserProfileResponse updateProfile(@Valid UserProfileRequest request) {
         return userBusinessLogic.updateProfile(currentUserId(), request);
     }
 

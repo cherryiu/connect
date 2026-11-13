@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.Locale;
 
 import org.bson.types.ObjectId;
 
@@ -36,7 +37,8 @@ public class UserBusinessLogic {
     }
 
     public UserProfileResponse createProfile(UserProfileRequest request) {
-        if (userProfileRepository.findByEmail(request.email()).isPresent()) {
+        String email = normalizeEmail(request.email());
+        if (userProfileRepository.findByEmail(email).isPresent()) {
             throw new ClientErrorException("Email is already registered", Response.Status.CONFLICT);
         }
         UserProfile profile = responseMapper.toNewEntity(request);
@@ -46,6 +48,13 @@ public class UserBusinessLogic {
 
     public UserProfileResponse updateProfile(String userId, UserProfileRequest request) {
         UserProfile profile = findProfileOrThrow(userId);
+        String email = normalizeEmail(request.email());
+        boolean emailTaken = userProfileRepository.findByEmail(email)
+                .filter(existing -> !existing.id.equals(profile.id))
+                .isPresent();
+        if (emailTaken) {
+            throw new ClientErrorException("Email is already registered", Response.Status.CONFLICT);
+        }
         responseMapper.applyRequest(profile, request);
         userProfileRepository.update(profile);
         return responseMapper.toUserResponse(profile);
@@ -104,5 +113,9 @@ public class UserBusinessLogic {
             throw new BadRequestException("Invalid user id");
         }
         return new ObjectId(id);
+    }
+
+    private String normalizeEmail(String email) {
+        return email.trim().toLowerCase(Locale.ROOT);
     }
 }

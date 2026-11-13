@@ -4,6 +4,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Pressable,
   RefreshControl,
@@ -17,6 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { getHangoutsForUser, type Hangout } from '../api/hangoutsApi';
 import {
   getCurrentUser,
+  deleteCurrentUser,
   getFriends,
   type FriendProfile,
   type UserProfileResponse,
@@ -29,7 +31,7 @@ type ProfileNavigation = NativeStackNavigationProp<RootStackParamList, 'ViewProf
 
 export default function ViewProfileScreen() {
   const navigation = useNavigation<ProfileNavigation>();
-  const { isLoading: authLoading, isLoggedIn, user } = useAuth();
+  const { isLoading: authLoading, isLoggedIn, logout, user } = useAuth();
   const [profile, setProfile] = useState<UserProfileResponse>();
   const [friends, setFriends] = useState<FriendProfile[]>([]);
   const [hangouts, setHangouts] = useState<Hangout[]>([]);
@@ -38,6 +40,7 @@ export default function ViewProfileScreen() {
   const [showFriends, setShowFriends] = useState(false);
   const [editMessageVisible, setEditMessageVisible] = useState(false);
   const [error, setError] = useState<string>();
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !isLoggedIn) navigation.replace('Login');
@@ -76,17 +79,42 @@ export default function ViewProfileScreen() {
 
   const stats = useMemo(() => {
     const now = Date.now();
+    const participatingHangouts = hangouts.filter(
+      (hangout) => user?.authUserId && hangout.participantAuthUserIds.includes(user.authUserId),
+    );
     return {
-      attended: hangouts.filter((hangout) => Date.parse(hangout.endTime) < now).length,
+      attended: participatingHangouts.filter((hangout) => Date.parse(hangout.endTime) < now).length,
       // New hangouts put their creator first in participantAuthUserIds.
-      created: hangouts.filter((hangout) => hangout.participantAuthUserIds[0] === user?.authUserId)
-        .length,
+      created: participatingHangouts.filter(
+        (hangout) => hangout.participantAuthUserIds[0] === user?.authUserId,
+      ).length,
     };
   }, [hangouts, user?.authUserId]);
 
   const displayName = profile?.displayName || user?.displayName || 'your profile';
   const avatarUrl = profile?.avatarUrl || user?.avatarUrl;
   const bio = profile?.bio?.trim() || 'Add a little something about yourself.';
+
+  const deleteAccount = async () => {
+    try {
+      setError(undefined);
+      setDeletingAccount(true);
+      await deleteCurrentUser();
+      await logout();
+      navigation.replace('Login');
+    } catch {
+      setError('Your account could not be deleted. Please try again.');
+    } finally {
+      setDeletingAccount(false);
+    }
+  };
+
+  const confirmAccountDeletion = () => {
+    Alert.alert('Delete account?', 'Your profile will be permanently deleted.', [
+      { style: 'cancel', text: 'Cancel' },
+      { style: 'destructive', text: 'Delete', onPress: () => void deleteAccount() },
+    ]);
+  };
 
   return (
     <SafeAreaView style={styles.safeArea} testID="profile-screen">
@@ -180,6 +208,17 @@ export default function ViewProfileScreen() {
           ) : null}
 
           {showFriends ? <FriendsPanel friends={friends} /> : null}
+
+          <Pressable
+            accessibilityRole="button"
+            disabled={deletingAccount}
+            onPress={confirmAccountDeletion}
+            style={({ pressed }) => [styles.deleteAccount, pressed && styles.pressed]}
+          >
+            <Text style={styles.deleteAccountText}>
+              {deletingAccount ? 'DELETING ACCOUNT...' : 'DELETE ACCOUNT'}
+            </Text>
+          </Pressable>
         </ScrollView>
       </View>
     </SafeAreaView>
@@ -399,4 +438,11 @@ const styles = StyleSheet.create({
   friendEmail: { color: COLORS.muted, fontFamily: FONTS.primary, fontSize: 9, marginTop: 2 },
   friendMark: { color: COLORS.coral, fontSize: 18, marginLeft: 8 },
   emptyFriends: { color: COLORS.muted, fontFamily: FONTS.primary, fontSize: 10, padding: 12 },
+  deleteAccount: { alignItems: 'center', marginTop: 34, paddingVertical: 12 },
+  deleteAccountText: {
+    color: COLORS.primary,
+    fontFamily: FONTS.primaryBold,
+    fontSize: 10,
+    letterSpacing: 0.8,
+  },
 });

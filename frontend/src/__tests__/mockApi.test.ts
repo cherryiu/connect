@@ -1,6 +1,11 @@
 import { describe, expect, test } from '@jest/globals';
 
-import { createHangout, getHangoutsForUser } from '../api/hangoutsApi';
+import {
+  createHangout,
+  deleteHangout,
+  getHangoutsForUser,
+  joinHangout,
+} from '../api/hangoutsApi';
 import { getAuthStatus, submitAuthCredentials } from '../api/authApi';
 import { getFriends } from '../api/usersApi';
 
@@ -20,13 +25,21 @@ describe('in-memory API', () => {
       endTime: '2026-08-20T18:00:00.000Z',
       hangoutName: 'mock movie night',
       isOpen: true,
+      invitedAuthUserIds: [friends[0].authUserId],
       location: 'Mock Theater',
-      participantAuthUserIds: ['mock-user-1', friends[0].authUserId],
+      participantAuthUserIds: ['mock-user-1'],
       startTime: '2026-08-20T16:00:00.000Z',
     });
     const hangouts = await getHangoutsForUser('mock-user-1');
 
     expect(hangouts).toContainEqual(created);
     await expect(getHangoutsForUser(friends[0].authUserId)).resolves.toContainEqual(created);
+
+    const joined = await joinHangout(created.authHangoutId, friends[0].authUserId);
+    expect(joined.participantAuthUserIds).toContain(friends[0].authUserId);
+    expect(joined.invitedAuthUserIds).not.toContain(friends[0].authUserId);
+
+    await deleteHangout(created.authHangoutId);
+    await expect(getHangoutsForUser('mock-user-1')).resolves.not.toContainEqual(joined);
   });
 });

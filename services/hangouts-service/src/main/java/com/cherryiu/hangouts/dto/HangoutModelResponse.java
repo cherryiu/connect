@@ -7,6 +7,7 @@ public record HangoutModelResponse(
         String id,
         String authHangoutId,
         List<String> participantAuthUserIds,
+        List<String> invitedAuthUserIds,
         String hangoutName,
         String location,
         Instant startTime,

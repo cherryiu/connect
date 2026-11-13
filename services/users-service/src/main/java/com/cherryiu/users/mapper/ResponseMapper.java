@@ -10,6 +10,7 @@ import io.quarkus.elytron.security.common.BcryptUtil;
 import jakarta.enterprise.context.ApplicationScoped;
 
 import java.time.Instant;
+import java.util.Locale;
 
 @ApplicationScoped
 public class ResponseMapper {
@@ -47,12 +48,11 @@ public class ResponseMapper {
     }
 
     public void applyRequest(UserProfile profile, UserProfileRequest request) {
-        profile.displayName = request.displayName();
-        profile.email = request.email();
+        profile.displayName = request.displayName().trim();
+        profile.email = request.email().trim().toLowerCase(Locale.ROOT);
         if (request.password() != null && !request.password().isBlank()) {
             profile.password = BcryptUtil.bcryptHash(request.password());
         }
-        profile.role = request.role();
         profile.avatarUrl = request.avatarUrl();
         profile.bio = request.bio();
         profile.updatedAt = Instant.now();
@@ -60,6 +60,7 @@ public class ResponseMapper {
 
     public UserProfile toNewEntity(UserProfileRequest request) {
         UserProfile profile = new UserProfile();
+        profile.role = "USER";
         profile.createdAt = Instant.now();
         applyRequest(profile, request);
         return profile;

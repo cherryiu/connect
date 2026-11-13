@@ -79,6 +79,9 @@ async function handleMockRequest(config: InternalAxiosRequestConfig) {
 
   if (method === 'POST' && path === '/api/users/register') {
     const body = requestBody<UserProfileRequest>(config);
+    if (users.some((user) => user.email.toLowerCase() === body.email.trim().toLowerCase())) {
+      return mockResponse(config, 409, { message: 'Email is already registered' });
+    }
     const user: UserProfileResponse = {
       avatarUrl: body.avatarUrl,
       bio: body.bio,
@@ -111,10 +114,21 @@ async function handleMockRequest(config: InternalAxiosRequestConfig) {
     return mockResponse(config, 200, friends);
   }
 
+  if (method === 'DELETE' && path === '/api/users/delete') {
+    authenticated = false;
+    users = users.filter((user) => user.id !== MOCK_USER_ID);
+    return mockResponse(config, 204, null);
+  }
+
   const userHangoutsMatch = path.match(/^\/api\/hangouts\/user\/([^/]+)$/);
   if (method === 'GET' && userHangoutsMatch) {
     const userId = decodeURIComponent(userHangoutsMatch[1]);
-    const result = hangouts.filter((hangout) => hangout.participantAuthUserIds.includes(userId));
+    const result = hangouts.filter(
+      (hangout) =>
+        hangout.participantAuthUserIds.includes(userId) ||
+        hangout.invitedAuthUserIds.includes(userId) ||
+        hangout.isOpen,
+    );
     return mockResponse(config, 200, result);
   }
 
@@ -144,6 +158,25 @@ async function handleMockRequest(config: InternalAxiosRequestConfig) {
       currentIndex === index ? updated : hangout,
     );
     return mockResponse(config, 200, updated);
+  }
+
+  const deleteHangoutMatch = path.match(/^\/api\/hangouts\/([^/]+)\/delete$/);
+  if (method === 'DELETE' && deleteHangoutMatch) {
+    const authHangoutId = decodeURIComponent(deleteHangoutMatch[1]);
+    const exists = hangouts.some((hangout) => hangout.authHangoutId === authHangoutId);
+    if (!exists) return mockResponse(config, 404, { message: 'Hangout not found' });
+    hangouts = hangouts.filter((hangout) => hangout.authHangoutId !== authHangoutId);
+    return mockResponse(config, 204, null);
+  }
+
+  const inviteMatch = path.match(/^\/api\/hangouts\/([^/]+)\/invitations\/([^/]+)$/);
+  if (method === 'POST' && inviteMatch) {
+    return updateMembership(config, inviteMatch[1], inviteMatch[2], 'invite', now);
+  }
+
+  const joinMatch = path.match(/^\/api\/hangouts\/([^/]+)\/join\/([^/]+)$/);
+  if (method === 'POST' && joinMatch) {
+    return updateMembership(config, joinMatch[1], joinMatch[2], 'join', now);
   }
 
   return mockResponse(config, 404, { message: `No mock route for ${method} ${path}` });
@@ -192,10 +225,44 @@ function createSeedHangouts(): Hangout[] {
       isOpen: true,
       location: 'Local Good Coffee Co.',
       participantAuthUserIds: [MOCK_USER_ID, 'mock-friend-ava', 'mock-friend-miles'],
+      invitedAuthUserIds: [],
       startTime: start.toISOString(),
       updatedAt: createdAt,
     },
   ];
+}
+
+function updateMembership(
+  config: InternalAxiosRequestConfig,
+  encodedHangoutId: string,
+  encodedUserId: string,
+  action: 'invite' | 'join',
+  now: string,
+) {
+  const authHangoutId = decodeURIComponent(encodedHangoutId);
+  const authUserId = decodeURIComponent(encodedUserId);
+  const index = hangouts.findIndex((hangout) => hangout.authHangoutId === authHangoutId);
+  if (index < 0) return mockResponse(config, 404, { message: 'Hangout not found' });
+
+  const current = hangouts[index];
+  if (action === 'join' && !current.isOpen && !current.invitedAuthUserIds.includes(authUserId)) {
+    return mockResponse(config, 403, { message: 'Invitation required' });
+  }
+
+  const updated: Hangout = {
+    ...current,
+    invitedAuthUserIds:
+      action === 'invite'
+        ? Array.from(new Set([...current.invitedAuthUserIds, authUserId]))
+        : current.invitedAuthUserIds.filter((id) => id !== authUserId),
+    participantAuthUserIds:
+      action === 'join'
+        ? Array.from(new Set([...current.participantAuthUserIds, authUserId]))
+        : current.participantAuthUserIds,
+    updatedAt: now,
+  };
+  hangouts = hangouts.map((hangout, currentIndex) => (currentIndex === index ? updated : hangout));
+  return mockResponse(config, 200, updated);
 }
 
 function futureDate(daysAhead: number, hour: number) {

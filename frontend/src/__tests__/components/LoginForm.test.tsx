@@ -1,5 +1,5 @@
 import React from 'react';
-import { render } from '@testing-library/react-native';
+import { render, waitFor } from '@testing-library/react-native';
 import { expect, jest, test } from '@jest/globals';
 
 import LoginForm from '../../components/forms/LoginForm';
@@ -16,7 +16,7 @@ jest.mock('../../hooks/useAuth', () => ({
   }),
 }));
 
-test('renders without crashing', () => {
+test('renders without crashing', async () => {
   const { getByTestId } = render(<LoginForm />);
-  expect(getByTestId('login-form')).toBeTruthy();
+  await waitFor(() => expect(getByTestId('login-form')).toBeTruthy());
 });
