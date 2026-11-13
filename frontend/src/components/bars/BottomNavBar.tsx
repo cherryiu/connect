@@ -1,73 +1,95 @@
-import { COLORS } from '../../constants';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-const navItems = [
-  { label: 'CALENDAR', icon: '▣', active: true },
-  { label: 'LOGS', icon: '▤' },
-  { label: 'SCHED', icon: '✓' },
-  { label: 'FRIENDS', icon: '◎' },
+import { COLORS, FONTS } from '../../constants';
+
+type Props = {
+  onCreate: () => void;
+};
+
+const navItems: { label: string; icon: string; active?: boolean }[] = [
+  { label: 'logs', icon: 'ᝰ' },
+  { label: 'calendar', icon: '☑', active: true },
+  { label: 'friends', icon: '𐀪𐀪' },
 ];
 
-export default function BottomNavBar() {
+export default function BottomNavBar({ onCreate }: Props) {
   return (
-    <View style={styles.bottomNav}>
+    <View style={styles.container}>
       {navItems.map((item) => (
         <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ selected: item.active ?? false }}
           key={item.label}
-          style={[styles.navItem, item.active ? styles.activeNavItem : null]}
+          style={({ pressed }) => [
+            styles.item,
+            item.active && styles.activeItem,
+            pressed && styles.pressedItem,
+          ]}
         >
-          <Text style={[styles.navIcon, item.active ? styles.activeNavText : null]}>
-            {item.icon}
-          </Text>
-          <Text style={[styles.navLabel, item.active ? styles.activeNavText : null]}>
-            {item.label}
-          </Text>
+          <Text style={[styles.icon, item.active && styles.activeText]}>{item.icon}</Text>
+          <Text style={[styles.label, item.active && styles.activeText]}>{item.label}</Text>
         </Pressable>
       ))}
+
+      <Pressable
+        accessibilityLabel="Create a hangout"
+        accessibilityRole="button"
+        onPress={onCreate}
+        style={({ pressed }) => [styles.createItem, pressed && styles.pressedItem]}
+      >
+        <Text style={styles.createIcon}>＋</Text>
+        <Text style={styles.createLabel}>new</Text>
+      </Pressable>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  bottomNav: {
-    alignItems: 'center',
-    backgroundColor: COLORS.background,
-    borderTopColor: COLORS.teal,
-    borderTopWidth: 4,
-    bottom: 0,
+  container: {
+    alignItems: 'stretch',
+    backgroundColor: 'rgba(255,250,245,0.96)',
+    borderColor: COLORS.primary,
+    borderRadius: 10,
+    borderWidth: 1,
+    bottom: 12,
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    left: 0,
-    paddingBottom: 28,
-    paddingHorizontal: 8,
-    paddingTop: 12,
+    left: 14,
+    minHeight: 58,
+    padding: 4,
     position: 'absolute',
-    right: 0,
-    zIndex: 2,
+    right: 14,
+    shadowColor: '#000',
+    shadowOffset: { height: 3, width: 0 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+    zIndex: 10,
   },
-  navIcon: {
-    color: COLORS.tealDark,
-  },
-  navLabel: {
-    color: COLORS.tealDark,
-    fontSize: 19,
-    fontWeight: '900',
-  },
-  navItem: {
+  item: {
     alignItems: 'center',
+    flex: 1,
     justifyContent: 'center',
     minHeight: 48,
-    minWidth: 72,
-    paddingHorizontal: 6,
-    paddingVertical: 4,
   },
-  activeNavItem: {
-    backgroundColor: COLORS.yellow,
-    borderColor: COLORS.teal,
-    borderWidth: 2,
-    borderRadius: 8,
+  activeItem: { backgroundColor: 'rgba(156,65,65,0.08)', borderRadius: 6 },
+  pressedItem: { opacity: 0.58 },
+  icon: { color: COLORS.muted, fontSize: 17 },
+  label: { color: COLORS.muted, fontFamily: FONTS.primary, fontSize: 9, marginTop: 2 },
+  activeText: { color: COLORS.primary, fontWeight: '700' },
+  createItem: {
+    alignItems: 'center',
+    borderLeftColor: 'rgba(156,65,65,0.22)',
+    borderLeftWidth: 1,
+    flex: 1,
+    justifyContent: 'center',
+    minHeight: 48,
   },
-  activeNavText: {
-    color: COLORS.text,
+  createIcon: { color: COLORS.primary, fontSize: 20, lineHeight: 20 },
+  createLabel: {
+    color: COLORS.primary,
+    fontFamily: FONTS.primary,
+    fontSize: 9,
+    fontWeight: '700',
+    marginTop: 2,
   },
 });

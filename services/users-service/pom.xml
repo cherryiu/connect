@@ -57,10 +57,15 @@
             <scope>test</scope>
         </dependency>
 
-        <!-- Authentication -->
+        <!-- Supports the custom Mongo-backed identity provider. -->
         <dependency>
             <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-security-jpa</artifactId>
+            <artifactId>quarkus-security</artifactId>
+        </dependency>
+        <!-- Provides the BCrypt password helpers used by that provider. -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-elytron-security-common</artifactId>
         </dependency>
     </dependencies>
 

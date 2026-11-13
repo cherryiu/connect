@@ -11,6 +11,7 @@ import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
+import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
@@ -45,6 +46,21 @@ public class UserResource {
         return userBusinessLogic.getProfile(currentUserId());
     }
 
+    @GET
+    @Path("/friends")
+    @Operation(summary = "Get the current user's friends")
+    public Response getFriends() {
+        return Response.ok(userBusinessLogic.getFriends(currentUserId())).build();
+    }
+
+    @POST
+    @Path("/friends/{friendId}")
+    @Operation(summary = "Add a friend to the current user's friends list")
+    public Response addFriend(@PathParam("friendId") String friendId) {
+        userBusinessLogic.addFriend(currentUserId(), friendId);
+        return Response.noContent().build();
+    }
+
     @POST
     @PermitAll
     @Path("/register")
@@ -55,14 +71,14 @@ public class UserResource {
     }
 
     @PUT
-    @Path("/me")
+    @Path("/update")
     @Operation(summary = "Update the current user profile")
     public UserProfileResponse updateProfile(UserProfileRequest request) {
         return userBusinessLogic.updateProfile(currentUserId(), request);
     }
 
     @DELETE
-    @Path("/me")
+    @Path("/delete")
     @Operation(summary = "Delete the current user profile")
     public Response deleteProfile() {
         userBusinessLogic.deleteProfile(currentUserId());

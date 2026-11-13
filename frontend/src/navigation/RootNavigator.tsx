@@ -1,27 +1,31 @@
-import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { createStaticNavigation } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import HomeScreen from '../screens/HomeScreen';
-import LoginScreen from '../screens/LoginScreen';
-import HangoutFormScreen from '../screens/HangoutFormScreen';
-import { Hangout } from '../api/hangoutsApi';
 
+import type { Hangout } from '../api/hangoutsApi';
+import HangoutFormScreen from '../screens/HangoutFormScreen';
+import LoginScreen from '../screens/LoginScreen';
+import ScrapbookCalendarScreen from '../screens/ScrapbookCalendarScreen';
+import ViewProfileScreen from '../screens/ViewProfileScreen';
+
+// ensures that the navigation stack is type-safe and that the screens are properly defined with their expected parameters.
 export type RootStackParamList = {
-  Calendar: undefined;
-  'Hangout Form': { hangout?: Hangout } | undefined;
-  'Login Page': undefined;
+  HangoutForm: { hangout?: Hangout } | undefined;
+  Login: undefined;
+  ScrapbookCalendarScreen: undefined;
+  ViewProfileScreen: undefined;
 };
 
-const Stack = createNativeStackNavigator<RootStackParamList>();
+const RootStack = createNativeStackNavigator<RootStackParamList>({
+  initialRouteName: 'Login',
+  screenOptions: {
+    headerShown: false,
+  },
+  screens: {
+    HangoutForm: HangoutFormScreen,
+    Login: LoginScreen,
+    ScrapbookCalendarScreen,
+    ViewProfileScreen,
+  },
+});
 
-const RootNavigator = () => (
-  <NavigationContainer>
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="Calendar" component={HomeScreen} />
-      <Stack.Screen name="Hangout Form" component={HangoutFormScreen} />
-      <Stack.Screen name="Login Page" component={LoginScreen} />
-    </Stack.Navigator>
-  </NavigationContainer>
-);
-
-export default RootNavigator;
+export const RootNavigator = createStaticNavigation(RootStack);

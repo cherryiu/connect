@@ -1,139 +1,139 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Formik } from 'formik';
 import * as yup from 'yup';
-import { useCreateUser } from '../../hooks/useCreateUser';
+
+import { createUser, type UserProfileRequest } from '../../api/usersApi';
+import AuthFormContainer from './AuthFormContainer';
 import FormTextInput from './FormTextInput';
 
-export default function CreateNewUserForm() {
-  const createUserValidationSchema = yup.object().shape({
-    displayName: yup.string().required('Display name is required'),
-    email: yup.string().email('Please enter a valid email').required('Email is required'),
-    password: yup
-      .string()
-      .min(6, ({ min }) => `Password must be at least ${min} characters`)
-      .required('Password is required'),
-  });
+type Props = {
+  onBackToLogin: () => void;
+  onCreated: (email: string) => void;
+};
 
-  const { submitCreateUser } = useCreateUser();
+const initialValues: UserProfileRequest = {
+  avatarUrl: '',
+  bio: '',
+  displayName: '',
+  email: '',
+  password: '',
+  role: 'USER',
+};
 
+const createUserValidationSchema = yup.object({
+  avatarUrl: yup.string().url('Enter a valid avatar URL.'),
+  bio: yup.string().max(500, 'Bio must be 500 characters or fewer.'),
+  displayName: yup.string().trim().required('Display name is required.'),
+  email: yup.string().trim().email('Enter a valid email.').required('Email is required.'),
+  password: yup
+    .string()
+    .min(6, 'Password must be at least 6 characters.')
+    .required('Password is required.'),
+  role: yup.string().oneOf(['USER']).required(),
+});
+
+export default function CreateNewUserForm({ onBackToLogin, onCreated }: Props) {
   return (
-    <View testID="create-user-form" style={styles.container}>
-      <Text style={styles.title}>Create New User</Text>
-      <Formik
-        validationSchema={createUserValidationSchema}
-        initialValues={{ displayName: '', email: '', password: '', role: 'USER' }}
-        onSubmit={async (values, { setSubmitting, setStatus }) => {
-          try {
-            setStatus(undefined);
-            await submitCreateUser(values);
-          } catch (error) {
-            console.error('Create user failed:', error);
-            setStatus('Create user failed. Please check your input and try again.');
-          } finally {
-            setSubmitting(false);
-          }
-        }}
-      >
-        {({
-          handleChange,
-          handleBlur,
-          handleSubmit,
-          values,
-          errors,
-          touched,
-          isValid,
-          isSubmitting,
-          status,
-        }) => (
-          <>
-            {status && <Text style={styles.errorText}>{status}</Text>}
-            <FormTextInput
-              title="Display Name"
-              placeholder="john doe"
-              value={values.displayName}
-              onChangeText={handleChange('displayName')}
-              onBlur={handleBlur('displayName')}
-              error={errors.displayName}
-              touched={touched.displayName}
-            />
-            <FormTextInput
-              title="Email"
-              placeholder="example@gmail.com"
-              value={values.email}
-              onChangeText={handleChange('email')}
-              onBlur={handleBlur('email')}
-              error={errors.email}
-              touched={touched.email}
-              keyboardType="email-address"
-            />
-            <FormTextInput
-              title="Password"
-              placeholder="********"
-              value={values.password}
-              onChangeText={handleChange('password')}
-              onBlur={handleBlur('password')}
-              error={errors.password}
-              touched={touched.password}
-              secureTextEntry
-            />
-            {/* change button styles based on form state */}
-            <TouchableOpacity
-              style={[styles.button, (!isValid || isSubmitting) && styles.buttonDisabled]}
-              onPress={() => handleSubmit()}
-              disabled={!isValid || isSubmitting}
-            >
-              <Text style={styles.buttonText}>{isSubmitting ? 'Submitting...' : 'Sign Up!'}</Text>
-            </TouchableOpacity>
-          </>
-        )}
-      </Formik>
-    </View>
+    <Formik<UserProfileRequest>
+      initialValues={initialValues}
+      validateOnMount
+      validationSchema={createUserValidationSchema}
+      onSubmit={async (values, { setSubmitting, setStatus }) => {
+        try {
+          setStatus(undefined);
+          await createUser({
+            ...values,
+            avatarUrl: values.avatarUrl?.trim() || undefined,
+            bio: values.bio?.trim() || undefined,
+            displayName: values.displayName.trim(),
+            email: values.email.trim(),
+            role: 'USER',
+          });
+          onCreated(values.email.trim());
+        } catch {
+          setStatus('Account creation failed. Check your information and try again.');
+        } finally {
+          setSubmitting(false);
+        }
+      }}
+    >
+      {({
+        errors,
+        handleBlur,
+        handleChange,
+        handleSubmit,
+        isSubmitting,
+        isValid,
+        status,
+        touched,
+        values,
+      }) => (
+        <AuthFormContainer
+          error={status}
+          isSubmitDisabled={!isValid}
+          isSubmitting={isSubmitting}
+          onSubmit={() => handleSubmit()}
+          onSwitch={onBackToLogin}
+          submitLabel="CREATE ACCOUNT"
+          submittingLabel="CREATING ACCOUNT..."
+          switchLabel="Log in!"
+          switchPrompt="Already have an account?"
+          testID="create-user-form"
+          title="get ready to hang! ᯓ★"
+        >
+          <FormTextInput
+            title="DISPLAY NAME"
+            placeholder="Display name"
+            value={values.displayName}
+            onChangeText={handleChange('displayName')}
+            onBlur={handleBlur('displayName')}
+            error={errors.displayName}
+            touched={touched.displayName}
+          />
+          <FormTextInput
+            title="EMAIL"
+            placeholder="Email"
+            value={values.email}
+            onChangeText={handleChange('email')}
+            onBlur={handleBlur('email')}
+            error={errors.email}
+            touched={touched.email}
+            keyboardType="email-address"
+            autoCapitalize="none"
+          />
+          <FormTextInput
+            title="PASSWORD"
+            placeholder="Password"
+            value={values.password}
+            onChangeText={handleChange('password')}
+            onBlur={handleBlur('password')}
+            error={errors.password}
+            touched={touched.password}
+            secureTextEntry
+          />
+          <FormTextInput
+            title="AVATAR URL (OPTIONAL)"
+            placeholder="https://example.com/avatar.jpg"
+            value={values.avatarUrl}
+            onChangeText={handleChange('avatarUrl')}
+            onBlur={handleBlur('avatarUrl')}
+            error={errors.avatarUrl}
+            touched={touched.avatarUrl}
+            keyboardType="url"
+            autoCapitalize="none"
+          />
+          <FormTextInput
+            title="BIO (OPTIONAL)"
+            placeholder="Tell your friends about yourself"
+            value={values.bio}
+            onChangeText={handleChange('bio')}
+            onBlur={handleBlur('bio')}
+            error={errors.bio}
+            touched={touched.bio}
+            multiline
+            numberOfLines={3}
+          />
+        </AuthFormContainer>
+      )}
+    </Formik>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    paddingHorizontal: 20,
-  },
-  logo: {
-    height: 200,
-    width: 200,
-    resizeMode: 'contain',
-    marginBottom: 20,
-  },
-  title: {
-    fontSize: 32,
-    marginBottom: 40,
-    fontWeight: 'bold',
-    color: 'black',
-  },
-  icon: {
-    marginRight: 10,
-  },
-  button: {
-    width: '100%',
-    height: 50,
-    backgroundColor: '#1E90FF',
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 18,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  errorText: {
-    color: 'red',
-    alignSelf: 'flex-start',
-    marginBottom: 10,
-  },
-});

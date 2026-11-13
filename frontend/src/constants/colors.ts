@@ -1,10 +1,12 @@
 export const COLORS = {
   primary: '#9C4141',
   background: '#E2D9CE',
+  surface: '#fff8f3',
   text: '#554241',
   muted: '#887271',
   mutedBorder: 'rgba(132, 165, 157, 0.22)',
   brown: '#887271',
+  black: '#1F1B14',
   placeholder: '#DBC0BF',
   yellow: '#F6BD60',
   coral: '#F28482',

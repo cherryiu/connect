@@ -1,6 +1,7 @@
 package com.cherryiu.users.mapper;
 
 import com.cherryiu.users.dto.AuthStatusResponse;
+import com.cherryiu.users.dto.FriendProfileResponse;
 import com.cherryiu.users.dto.UserProfileRequest;
 import com.cherryiu.users.dto.UserProfileResponse;
 import com.cherryiu.users.model.UserProfile;
@@ -33,6 +34,15 @@ public class ResponseMapper {
             profile.email, 
             profile.displayName,
             profile.avatarUrl
+        );
+    }
+
+    public FriendProfileResponse toFriendResponse(UserProfile profile) {
+        return new FriendProfileResponse(
+                profile.id.toString(),
+                profile.displayName,
+                profile.email,
+                profile.avatarUrl
         );
     }
 

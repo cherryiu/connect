@@ -1,67 +1,68 @@
 // frontend/src/components/forms/FormTextInput.tsx
 import React from 'react';
-import {
-  Text,
-  TextInput,
-  View,
-  StyleSheet,
-  KeyboardTypeOptions,
-  TextInputProps,
-} from 'react-native';
+import { Text, TextInput, View, StyleSheet, TextInputProps } from 'react-native';
 import { COLORS, FONTS } from '../../constants';
 
-type Props = {
+type Props = Omit<TextInputProps, 'style'> & {
   title: string;
-  placeholder: string;
-  value: string;
-  onChangeText: (value: string) => void;
-  onBlur: TextInputProps['onBlur'];
   error?: string;
   touched?: boolean;
-  secureTextEntry?: boolean;
-  keyboardType?: KeyboardTypeOptions;
+  variant?: 'login' | 'hangout';
 };
 
 export default function FormTextInput({
   title,
-  placeholder,
-  value,
-  onChangeText,
-  onBlur,
   error,
   touched,
-  secureTextEntry,
-  keyboardType = 'default',
+  variant = 'login',
+  multiline,
+  ...inputProps
 }: Props) {
+  const isHangout = variant === 'hangout';
+
   return (
-    <>
-      <Text style={styles.inputTitle}>{title}</Text>
-      <View style={styles.inputContainer}>
+    <View style={isHangout ? styles.hangoutField : styles.loginField}>
+      <Text style={isHangout ? styles.hangoutTitle : styles.loginTitle}>{title}</Text>
+      {isHangout ? (
         <TextInput
-          style={styles.input}
-          placeholder={placeholder}
-          keyboardType={keyboardType}
-          secureTextEntry={secureTextEntry}
-          onChangeText={onChangeText}
-          onBlur={onBlur}
-          value={value}
+          autoCapitalize="sentences"
+          multiline={multiline}
+          placeholderTextColor="rgba(85,66,65,0.42)"
+          style={[styles.hangoutInput, multiline && styles.multilineInput]}
+          {...inputProps}
         />
-      </View>
-      {/* // handles error message */}
+      ) : (
+        <View
+          style={[
+            styles.loginInputContainer,
+            multiline ? styles.loginMultilineContainer : undefined,
+            touched && error ? styles.loginInputContainerWithError : undefined,
+          ]}
+        >
+          <TextInput
+            multiline={multiline}
+            placeholderTextColor="rgba(85,66,65,0.42)"
+            style={[styles.loginInput, multiline && styles.loginMultilineInput]}
+            {...inputProps}
+          />
+        </View>
+      )}
       {touched && error && <Text style={styles.errorText}>{error}</Text>}
-    </>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  inputTitle: {
+  loginField: { width: '100%' },
+  loginTitle: {
+    color: COLORS.text,
     fontFamily: FONTS.primary,
-    fontSize: 12,
-    marginBottom: 28,
-    fontWeight: 'bold',
-    color: COLORS.brown,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1.3,
+    marginBottom: 7,
   },
-  inputContainer: {
+  loginInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     width: '100%',
@@ -71,16 +72,42 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     marginBottom: 20,
   },
-  input: {
+  loginInputContainerWithError: { marginBottom: 6 },
+  loginMultilineContainer: { height: 96 },
+  loginInput: {
     flex: 1,
     height: '100%',
     fontFamily: FONTS.secondary,
-    fontSize: 16,
-    color: COLORS.placeholder,
+    fontSize: 15,
+    color: COLORS.black,
   },
+  loginMultilineInput: { paddingVertical: 12, textAlignVertical: 'top' },
+  hangoutField: { marginBottom: 18 },
+  hangoutTitle: {
+    color: COLORS.text,
+    fontFamily: FONTS.primary,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1.3,
+    marginBottom: 7,
+  },
+  hangoutInput: {
+    backgroundColor: 'rgba(255,255,255,0.45)',
+    borderColor: COLORS.teal,
+    borderWidth: 1.5,
+    color: COLORS.black,
+    fontFamily: FONTS.secondary,
+    fontSize: 15,
+    minHeight: 48,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  multilineInput: { minHeight: 120, textAlignVertical: 'top' },
   errorText: {
-    color: 'red',
     alignSelf: 'flex-start',
+    color: COLORS.primary,
+    fontFamily: FONTS.primary,
+    fontSize: 11,
     marginBottom: 10,
   },
 });

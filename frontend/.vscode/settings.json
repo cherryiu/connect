@@ -1,1 +1,5 @@
-{}
+{
+  "vscode-pokemon.theme": "beach",
+  "vscode-pokemon.shinyOdds": 2000,
+  "vscode-pokemon.position": "explorer"
+}

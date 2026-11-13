@@ -5,6 +5,12 @@
     "version": "1.0.0",
     "ios": {
       "bundleIdentifier": "com.anonymous.MyApp"
+    },
+    "plugins": [
+      "expo-font"
+    ],
+    "android": {
+      "package": "com.anonymous.MyApp"
     }
   }
 }

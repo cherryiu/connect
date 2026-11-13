@@ -1,8 +1,8 @@
 import React from 'react';
-import ScrapbookCalendarScreen from '../components/scrapbook/ScrapbookCalendarScreen';
+import LoginScreen from './LoginScreen';
 
 const HomeScreen = () => {
-  return <ScrapbookCalendarScreen />;
+  return <LoginScreen />;
 };
 
 export default HomeScreen;

@@ -22,9 +22,25 @@ export type UserProfileRequest = {
   bio?: string;
 };
 
+export type FriendProfile = {
+  authUserId: string;
+  avatarUrl?: string;
+  displayName: string;
+  email: string;
+};
+
 export async function getCurrentUser() {
   const response = await API.get<UserProfileResponse>('/api/users/me');
   return response.data;
+}
+
+export async function getFriends() {
+  const response = await API.get<FriendProfile[]>('/api/users/friends');
+  return response.data;
+}
+
+export async function addFriend(authUserId: string) {
+  await API.post(`/api/users/friends/${encodeURIComponent(authUserId)}`);
 }
 
 export async function createUser(body: UserProfileRequest) {
@@ -33,10 +49,10 @@ export async function createUser(body: UserProfileRequest) {
 }
 
 export async function updateCurrentUser(body: UserProfileRequest) {
-  const response = await API.put<UserProfileResponse>('/api/users/me', body);
+  const response = await API.put<UserProfileResponse>('/api/users/update', body);
   return response.data;
 }
 
 export async function deleteCurrentUser() {
-  await API.delete('/api/users/me');
+  await API.delete('/api/users/delete');
 }

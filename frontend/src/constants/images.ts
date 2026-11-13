@@ -1,7 +1,6 @@
 export const IMAGES = {
   paper: 'https://www.transparenttextures.com/patterns/natural-paper.png',
-  avatar:
-    'https://lh3.googleusercontent.com/aida-public/AB6AXuBIG4QDXP2HUrVblb005CphaKTPcDWASXtUBDW2mZ7Zq64zI5UUl4BeoqBvhEapf59yIJ3uxEULLMkusK2PfgyO_X7js5HK19qCUixlGoRH4lMXpk5GY8ibt_I6x5Og0qD4qkTufjiUcTunAqFD27Xs7yblVeWmG9CxatjXhZICr2QvEV5HtpqOVYL4TnMrXa80UYyAhQeujVKG__NBEVoCXwnMKYdnEQVymLYQlaV3XwSTkdINVBY7dpMh1_X3GfnFkgYfmmn1_A',
+  avatar: 'https://i.pinimg.com/736x/62/c0/70/62c0702e31be74ba0c735d6bc5910434.jpg',
   friend:
     'https://lh3.googleusercontent.com/aida-public/AB6AXuCvsp_0VwuzLMNMX1oKZPO5pIsgbbzgN2cuKsBvAssrFN6Xsl4gMYPXE3-fwv0Sjn0Kl7n137yOHVw02FUIkogJviwzZDzLerkEOH4sFCiQWoQ9_ze_VRFYm3m48ZWVByuxAOMxr21anTlRhPiNNzyDa-H3kz8r7UjNoKcerP5clGGCNlRRQWq4I-wDgST7Lf_KYZf-SgsyFpIXcN4yCrRsvZ-Yy_0gLxHXhiJsy1IZDuLSL20pPYZGSA7Z2qEWfxlLjHGMGHM5sw',
   hangout:
