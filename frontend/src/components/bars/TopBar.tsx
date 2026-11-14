@@ -1,7 +1,18 @@
 import { useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { ActivityIndicator, View, StyleSheet, Text, Image, Pressable } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
 import { COLORS, IMAGES, FONTS } from '../../constants';
 import { RootStackParamList } from '../../navigation/RootNavigator';
 
@@ -14,14 +25,14 @@ type MenuNavigation = NativeStackNavigationProp<RootStackParamList, 'ViewProfile
 
 export default function TopBar({ avatarUrl, onLogout }: TopBarProps) {
   const navigation = useNavigation<MenuNavigation>();
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
   const logout = async () => {
     try {
       setLoggingOut(true);
       await onLogout();
-      setMenuOpen(false);
+      setSidebarOpen(false);
     } finally {
       setLoggingOut(false);
     }
@@ -31,50 +42,93 @@ export default function TopBar({ avatarUrl, onLogout }: TopBarProps) {
     navigation.navigate('ViewProfileScreen');
   };
 
+  const openSettings = () => {
+    setSidebarOpen(false);
+    Alert.alert('App settings', 'Settings controls will be added here next.');
+  };
+
   return (
     <View style={styles.topBar}>
-      <View style={styles.brandRow}>
-        <Text style={styles.menuIcon}>☰</Text>
-        <Text style={styles.brand}>COZE</Text>
+      <Text style={styles.brand}>COZE</Text>
+      <View style={styles.rightActions}>
+        <Pressable
+          accessibilityLabel="Open app menu"
+          accessibilityRole="button"
+          accessibilityState={{ expanded: sidebarOpen }}
+          hitSlop={10}
+          onPress={() => setSidebarOpen(true)}
+          style={({ pressed }) => [styles.dotsButton, pressed && styles.pressed]}
+        >
+          <View style={styles.dot} />
+          <View style={styles.dot} />
+          <View style={styles.dot} />
+        </Pressable>
+        <Pressable
+          accessibilityLabel="View profile"
+          accessibilityRole="button"
+          hitSlop={8}
+          onPress={openProfileScreen}
+          style={({ pressed }) => pressed && styles.pressed}
+        >
+          <Image source={{ uri: avatarUrl || IMAGES.avatar }} style={styles.avatar} />
+        </Pressable>
       </View>
-      <Pressable
-        accessibilityLabel="Open profile menu"
-        accessibilityRole="button"
-        accessibilityState={{ expanded: menuOpen }}
-        hitSlop={8}
-        onPress={() => setMenuOpen((open) => !open)}
-      >
-        <Image source={{ uri: avatarUrl || IMAGES.avatar }} style={styles.avatar} />
-      </Pressable>
 
-      {menuOpen ? (
-        <View style={styles.profileMenu}>
+      <Modal
+        animationType="fade"
+        onRequestClose={() => setSidebarOpen(false)}
+        transparent
+        visible={sidebarOpen}
+      >
+        <View style={styles.modalRoot}>
           <Pressable
-            accessibilityRole="button"
-            disabled={loggingOut}
-            onPress={() => void logout()}
-            style={({ pressed }) => [styles.menuButton, pressed && styles.menuButtonPressed]}
-          >
-            {loggingOut ? (
-              <ActivityIndicator color={COLORS.primary} size="small" />
-            ) : (
-              <Text style={styles.logoutText}>Log Out</Text>
-            )}
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            disabled={loggingOut}
-            onPress={() => openProfileScreen()}
-            style={({ pressed }) => [styles.menuButton, pressed && styles.menuButtonPressed]}
-          >
-            {loggingOut ? (
-              <ActivityIndicator color={COLORS.primary} size="small" />
-            ) : (
-              <Text style={styles.logoutText}>View Profile</Text>
-            )}
-          </Pressable>
+            accessibilityLabel="Close app menu"
+            onPress={() => setSidebarOpen(false)}
+            style={styles.backdrop}
+          />
+
+          <SafeAreaView style={styles.sidebar}>
+            <View style={styles.sidebarHeading}>
+              <View style={styles.sidebarBrandRow}>
+                <Text style={styles.sidebarBrand}>COZE</Text>
+              </View>
+              <Pressable
+                accessibilityLabel="Close app menu"
+                hitSlop={10}
+                onPress={() => setSidebarOpen(false)}
+                style={({ pressed }) => pressed && styles.pressed}
+              >
+                <Text style={styles.close}>×</Text>
+              </Pressable>
+            </View>
+
+            <Text style={styles.sidebarLabel}>OPTIONS</Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={openSettings}
+              style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
+            >
+              <Text style={styles.menuItemIcon}>⚙</Text>
+              <Text style={styles.menuItemText}>APP SETTINGS</Text>
+              <Text style={styles.menuItemArrow}>→</Text>
+            </Pressable>
+
+            <View style={styles.sidebarSpacer} />
+            <Pressable
+              accessibilityRole="button"
+              disabled={loggingOut}
+              onPress={() => void logout()}
+              style={({ pressed }) => [styles.logoutButton, pressed && styles.menuItemPressed]}
+            >
+              {loggingOut ? (
+                <ActivityIndicator color={COLORS.primary} size="small" />
+              ) : (
+                <Text style={styles.logoutText}>LOG OUT</Text>
+              )}
+            </Pressable>
+          </SafeAreaView>
         </View>
-      ) : null}
+      </Modal>
     </View>
   );
 }
@@ -82,51 +136,112 @@ export default function TopBar({ avatarUrl, onLogout }: TopBarProps) {
 const styles = StyleSheet.create({
   topBar: {
     alignItems: 'center',
-    backgroundColor: 'rgba(251,245,239,0.96)',
-    borderBottomColor: COLORS.teal,
-    borderBottomWidth: 1,
+    backgroundColor: '#fbf5ef',
     flexDirection: 'row',
-    height: 66,
+    height: 64,
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
+    paddingHorizontal: 18,
     zIndex: 20,
   },
-  brandRow: { alignItems: 'center', flexDirection: 'row' },
-  menuIcon: { color: COLORS.primary, fontSize: 22, marginRight: 14 },
-  brand: { color: COLORS.primary, fontFamily: FONTS.primary, fontSize: 17, fontWeight: '700' },
+  rightActions: { alignItems: 'center', flexDirection: 'row' },
+  dotsButton: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    height: 38,
+    justifyContent: 'center',
+    marginRight: 8,
+    width: 30,
+  },
+  dot: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 2.5,
+    height: 5,
+    marginHorizontal: 1.5,
+    width: 5,
+  },
+  brand: {
+    color: COLORS.black,
+    fontFamily: FONTS.secondaryBold,
+    fontSize: 24,
+    letterSpacing: -0.4,
+  },
   avatar: {
-    borderColor: COLORS.primary,
+    borderColor: COLORS.tealDark,
     borderWidth: 1.5,
     height: 40,
     width: 40,
     borderRadius: 20,
   },
-  profileMenu: {
-    backgroundColor: '#fffaf5',
+  pressed: { opacity: 0.55 },
+  modalRoot: { flex: 1, flexDirection: 'row' },
+  sidebar: {
+    backgroundColor: '#fbf5ef',
+    borderLeftColor: COLORS.teal,
+    borderLeftWidth: 1.5,
+    paddingHorizontal: 20,
+    shadowColor: '#000',
+    shadowOffset: { height: 0, width: -5 },
+    shadowOpacity: 0.16,
+    shadowRadius: 12,
+    width: '78%',
+    zIndex: 2,
+  },
+  backdrop: { backgroundColor: 'rgba(31,27,20,0.28)', flex: 1 },
+  sidebarHeading: {
+    alignItems: 'center',
+    borderBottomColor: 'rgba(132,165,157,0.32)',
+    borderBottomWidth: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    minHeight: 64,
+  },
+  sidebarBrandRow: { alignItems: 'center', flexDirection: 'row' },
+  sidebarBrand: {
+    color: COLORS.black,
+    fontFamily: FONTS.secondaryBold,
+    fontSize: 24,
+    letterSpacing: -0.4,
+  },
+  close: { color: COLORS.primary, fontFamily: FONTS.secondaryLight, fontSize: 32 },
+  sidebarLabel: {
+    color: COLORS.muted,
+    fontFamily: FONTS.primaryBold,
+    fontSize: 9,
+    letterSpacing: 1.2,
+    marginBottom: 8,
+    marginTop: 28,
+  },
+  menuItem: {
+    alignItems: 'center',
+    borderBottomColor: 'rgba(132,165,157,0.26)',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    minHeight: 54,
+    paddingHorizontal: 4,
+  },
+  menuItemPressed: { backgroundColor: 'rgba(132,165,157,0.12)', opacity: 0.7 },
+  menuItemIcon: { color: COLORS.tealDark, fontSize: 18, marginRight: 12 },
+  menuItemText: {
+    color: COLORS.black,
+    flex: 1,
+    fontFamily: FONTS.primaryBold,
+    fontSize: 11,
+    letterSpacing: 0.7,
+  },
+  menuItemArrow: { color: COLORS.primary, fontFamily: FONTS.primary, fontSize: 18 },
+  sidebarSpacer: { flex: 1 },
+  logoutButton: {
+    alignItems: 'center',
     borderColor: COLORS.primary,
     borderWidth: 1.5,
-    minWidth: 130,
-    position: 'absolute',
-    right: 20,
-    shadowColor: '#000',
-    shadowOffset: { height: 5, width: 0 },
-    shadowOpacity: 0.16,
-    shadowRadius: 10,
-    top: 58,
-    elevation: 8,
-  },
-  menuButton: {
-    alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 44,
-    paddingHorizontal: 18,
+    marginBottom: 22,
+    minHeight: 46,
   },
-  menuButtonPressed: { backgroundColor: 'rgba(156,65,65,0.08)' },
   logoutText: {
     color: COLORS.primary,
-    fontFamily: FONTS.primary,
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 1.1,
+    fontFamily: FONTS.primaryBold,
+    fontSize: 10,
+    letterSpacing: 0.9,
   },
 });

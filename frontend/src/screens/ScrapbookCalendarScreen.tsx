@@ -33,6 +33,7 @@ import { getFriends, type FriendProfile } from '../api/usersApi';
 import { COLORS, FONTS } from '../constants';
 import { useAuth } from '../context/AuthContext';
 import type { RootStackParamList } from '../navigation/RootNavigator';
+import formatCalendarMonth from '../utils/formatCalendarMonth';
 
 import TopBar from '../components/bars/TopBar';
 import BottomNavBar from '../components/bars/BottomNavBar';
@@ -264,15 +265,24 @@ function MonthHeader({
 }) {
   return (
     <View style={styles.monthHeader}>
-      <Pressable accessibilityLabel="Previous month" hitSlop={8} onPress={onPrevious}>
-        <Text style={styles.monthArrow}>←</Text>
+      <Pressable
+        accessibilityLabel="Previous month"
+        hitSlop={8}
+        onPress={onPrevious}
+        style={({ pressed }) => [styles.monthArrowButton, pressed && styles.monthArrowPressed]}
+      >
+        <Text style={styles.monthArrow}>‹</Text>
       </Pressable>
       <Text style={styles.monthTitle}>
-        <Text style={styles.monthName}>{month.toLocaleDateString('en-US', { month: 'long' })}</Text>{' '}
-        {month.getFullYear()}
+        <Text style={styles.monthName}>{formatCalendarMonth(month)}</Text> {month.getFullYear()}
       </Text>
-      <Pressable accessibilityLabel="Next month" hitSlop={8} onPress={onNext}>
-        <Text style={styles.monthArrow}>→</Text>
+      <Pressable
+        accessibilityLabel="Next month"
+        hitSlop={8}
+        onPress={onNext}
+        style={({ pressed }) => [styles.monthArrowButton, pressed && styles.monthArrowPressed]}
+      >
+        <Text style={styles.monthArrow}>›</Text>
       </Pressable>
     </View>
   );
@@ -645,19 +655,32 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 16,
   },
-  monthArrow: {
-    backgroundColor: '#050505',
-    borderRadius: 15,
-    color: '#fff',
-    fontSize: 16,
-    height: 28,
-    lineHeight: 28,
-    overflow: 'hidden',
-    textAlign: 'center',
-    width: 28,
+  monthArrowButton: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(132,165,157,0.12)',
+    borderColor: COLORS.tealDark,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    height: 36,
+    justifyContent: 'center',
+    width: 36,
   },
-  monthTitle: { color: '#171413', fontFamily: MONO, fontSize: 32, textTransform: 'lowercase' },
-  monthName: { fontWeight: '700' },
+  monthArrowPressed: { backgroundColor: 'rgba(132,165,157,0.24)', opacity: 0.72 },
+  monthArrow: {
+    color: COLORS.tealDark,
+    fontFamily: FONTS.secondary,
+    fontSize: 29,
+    lineHeight: 31,
+    textAlign: 'center',
+  },
+  monthTitle: {
+    color: '#171413',
+    fontFamily: FONTS.secondaryBold,
+    fontSize: 36,
+    lineHeight: 42,
+    textTransform: 'lowercase',
+  },
+  monthName: { fontFamily: FONTS.secondaryBold },
   calendarFrame: {
     borderColor: COLORS.black,
     borderRadius: 7,
