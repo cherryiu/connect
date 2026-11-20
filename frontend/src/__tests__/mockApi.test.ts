@@ -19,6 +19,7 @@ import {
   addFriend,
   getCurrentUser,
   getFriends,
+  getUserProfile,
   searchUsers,
   updateCurrentUser,
 } from '../api/usersApi';
@@ -52,6 +53,10 @@ describe('in-memory API', () => {
 
     const friends = await getFriends();
     expect(friends).toHaveLength(4);
+    await expect(getUserProfile(friends[0].authUserId)).resolves.toMatchObject({
+      displayName: friends[0].displayName,
+      id: friends[0].authUserId,
+    });
 
     const searchResults = await searchUsers('jules');
     expect(searchResults).toEqual([

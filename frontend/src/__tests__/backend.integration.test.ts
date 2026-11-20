@@ -119,6 +119,14 @@ describeBackend('real backend MVP flow', () => {
       expect.objectContaining({ authUserId: friendAuthUserId, email: friendEmail }),
     ]);
     expect(friends.data[0]).not.toHaveProperty('password');
+    const friendProfile = await client.get(`/api/users/profiles/${friendAuthUserId}`, {
+      headers: { Cookie: sessionCookie },
+    });
+    expect(friendProfile.data).toMatchObject({
+      displayName: 'Integration Friend',
+      id: friendAuthUserId,
+    });
+    expect(friendProfile.data).not.toHaveProperty('password');
 
     const startTime = new Date(Date.now() + 60 * 60 * 1000);
     const endTime = new Date(startTime.getTime() + 60 * 60 * 1000);

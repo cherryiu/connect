@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
+import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
@@ -28,6 +29,7 @@ import {
   getCurrentUser,
   deleteCurrentUser,
   getFriends,
+  getUserProfile,
   updateCurrentUser,
   type FriendProfile,
   type UserProfileResponse,
@@ -39,10 +41,15 @@ import { type AppColors, useTheme } from '../context/ThemeContext';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 
 type ProfileNavigation = NativeStackNavigationProp<RootStackParamList, 'ViewProfileScreen'>;
+type ProfileRoute = RouteProp<RootStackParamList, 'ViewProfileScreen'>;
 
 export default function ViewProfileScreen() {
   const navigation = useNavigation<ProfileNavigation>();
+  const route = useRoute<ProfileRoute>();
   const { isLoading: authLoading, isLoggedIn, logout, refreshAuthStatus, user } = useAuth();
+  const viewedFriend = route.params?.friend;
+  const viewedUserId = viewedFriend?.authUserId ?? user?.authUserId;
+  const isOwnProfile = !viewedFriend;
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [profile, setProfile] = useState<UserProfileResponse>();
@@ -62,19 +69,19 @@ export default function ViewProfileScreen() {
   }, [authLoading, isLoggedIn, navigation]);
 
   const loadProfile = useCallback(async () => {
-    if (!user?.authUserId) {
+    if (!viewedUserId) {
       setLoading(false);
       setRefreshing(false);
       return;
     }
-    const authUserId = user.authUserId;
+    const authUserId = viewedUserId;
 
     const visitRequest = syncLocationVisits()
       .catch(() => undefined)
       .then(() => getUserLocationVisits(authUserId));
     const [profileResult, friendsResult, hangoutsResult, visitsResult] = await Promise.allSettled([
-      getCurrentUser(),
-      getFriends(),
+      isOwnProfile ? getCurrentUser() : getUserProfile(authUserId),
+      isOwnProfile ? getFriends() : Promise.resolve([]),
       getHangoutsForUser(authUserId),
       visitRequest,
     ]);
@@ -90,7 +97,7 @@ export default function ViewProfileScreen() {
     setError(failed ? 'Some profile details could not be refreshed.' : undefined);
     setLoading(false);
     setRefreshing(false);
-  }, [user?.authUserId]);
+  }, [isOwnProfile, viewedUserId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -101,20 +108,23 @@ export default function ViewProfileScreen() {
   const stats = useMemo(() => {
     const now = Date.now();
     const participatingHangouts = hangouts.filter(
-      (hangout) => user?.authUserId && hangout.participantAuthUserIds.includes(user.authUserId),
+      (hangout) => viewedUserId && hangout.participantAuthUserIds.includes(viewedUserId),
     );
     return {
       attended: participatingHangouts.filter((hangout) => Date.parse(hangout.endTime) < now).length,
       // New hangouts put their creator first in participantAuthUserIds.
       created: participatingHangouts.filter(
-        (hangout) => hangout.participantAuthUserIds[0] === user?.authUserId,
+        (hangout) => hangout.participantAuthUserIds[0] === viewedUserId,
       ).length,
     };
-  }, [hangouts, user?.authUserId]);
+  }, [hangouts, viewedUserId]);
 
-  const displayName = profile?.displayName || user?.displayName || 'your profile';
-  const avatarUrl = profile?.avatarUrl || user?.avatarUrl;
-  const bio = profile?.bio?.trim() || 'Add a little something about yourself.';
+  const displayName =
+    profile?.displayName || viewedFriend?.displayName || user?.displayName || 'your profile';
+  const avatarUrl = profile?.avatarUrl || viewedFriend?.avatarUrl || user?.avatarUrl;
+  const bio =
+    profile?.bio?.trim() ||
+    (isOwnProfile ? 'Add a little something about yourself.' : 'No bio added yet.');
 
   const deleteAccount = async () => {
     try {
@@ -198,11 +208,11 @@ export default function ViewProfileScreen() {
         >
           <View style={styles.summaryRow}>
             <Pressable
-              accessibilityHint="Opens your photo library"
-              accessibilityLabel="Change profile picture"
+              accessibilityHint={isOwnProfile ? 'Opens your photo library' : undefined}
+              accessibilityLabel={isOwnProfile ? 'Change profile picture' : `${displayName}'s profile picture`}
               accessibilityRole="button"
-              disabled={loading || uploadingAvatar}
-              onPress={() => void uploadAvatar()}
+              disabled={!isOwnProfile || loading || uploadingAvatar}
+              onPress={isOwnProfile ? () => void uploadAvatar() : undefined}
               style={({ pressed }) => [styles.avatarButton, pressed && styles.pressed]}
             >
               {avatarUrl ? (
@@ -217,13 +227,15 @@ export default function ViewProfileScreen() {
                   <Text style={styles.avatarText}>{initials(displayName)}</Text>
                 </LinearGradient>
               )}
-              <View style={styles.avatarEditBadge}>
-                {uploadingAvatar ? (
-                  <ActivityIndicator color={colors.surface} size="small" />
-                ) : (
-                  <Text style={styles.avatarEditBadgeText}>＋</Text>
-                )}
-              </View>
+              {isOwnProfile ? (
+                <View style={styles.avatarEditBadge}>
+                  {uploadingAvatar ? (
+                    <ActivityIndicator color={colors.surface} size="small" />
+                  ) : (
+                    <Text style={styles.avatarEditBadgeText}>＋</Text>
+                  )}
+                </View>
+              ) : null}
             </Pressable>
 
             <View style={styles.stats}>
@@ -234,7 +246,9 @@ export default function ViewProfileScreen() {
                 <>
                   <Text style={styles.statLine}>{stats.attended} hangs attended</Text>
                   <Text style={styles.statLine}>{stats.created} hangs created</Text>
-                  <Text style={styles.statLine}>{friends.length} friends</Text>
+                  {isOwnProfile ? (
+                    <Text style={styles.statLine}>{friends.length} friends</Text>
+                  ) : null}
                 </>
               )}
             </View>
@@ -247,43 +261,52 @@ export default function ViewProfileScreen() {
 
           <PlacesVisitedBox
             loading={loading}
-            onPress={() => navigation.navigate('LogsScreen')}
+            onPress={isOwnProfile ? () => navigation.navigate('LogsScreen') : undefined}
             places={places}
           />
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          <View style={styles.actions}>
+          {isOwnProfile ? (
+            <View style={styles.actions}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setShowFriends((visible) => !visible)}
+                style={({ pressed }) => [styles.primaryAction, pressed && styles.pressed]}
+              >
+                <Text style={styles.primaryActionText}>
+                  {showFriends ? 'HIDE FRIENDS' : 'SEE ALL FRIENDS'}
+                </Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setEditProfileVisible(true)}
+                style={({ pressed }) => [styles.secondaryAction, pressed && styles.pressed]}
+              >
+                <Text style={styles.secondaryActionText}>EDIT PROFILE</Text>
+              </Pressable>
+            </View>
+          ) : null}
+
+          {isOwnProfile && showFriends ? (
+            <FriendsPanel
+              friends={friends}
+              onPress={(friend) => navigation.push('ViewProfileScreen', { friend })}
+            />
+          ) : null}
+
+          {isOwnProfile ? (
             <Pressable
               accessibilityRole="button"
-              onPress={() => setShowFriends((visible) => !visible)}
-              style={({ pressed }) => [styles.primaryAction, pressed && styles.pressed]}
+              disabled={deletingAccount}
+              onPress={confirmAccountDeletion}
+              style={({ pressed }) => [styles.deleteAccount, pressed && styles.pressed]}
             >
-              <Text style={styles.primaryActionText}>
-                {showFriends ? 'HIDE FRIENDS' : 'SEE ALL FRIENDS'}
+              <Text style={styles.deleteAccountText}>
+                {deletingAccount ? 'DELETING ACCOUNT...' : 'DELETE ACCOUNT'}
               </Text>
             </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => setEditProfileVisible(true)}
-              style={({ pressed }) => [styles.secondaryAction, pressed && styles.pressed]}
-            >
-              <Text style={styles.secondaryActionText}>EDIT PROFILE</Text>
-            </Pressable>
-          </View>
-
-          {showFriends ? <FriendsPanel friends={friends} /> : null}
-
-          <Pressable
-            accessibilityRole="button"
-            disabled={deletingAccount}
-            onPress={confirmAccountDeletion}
-            style={({ pressed }) => [styles.deleteAccount, pressed && styles.pressed]}
-          >
-            <Text style={styles.deleteAccountText}>
-              {deletingAccount ? 'DELETING ACCOUNT...' : 'DELETE ACCOUNT'}
-            </Text>
-          </Pressable>
+          ) : null}
         </ScrollView>
 
         {editProfileVisible && profile ? (
@@ -468,21 +491,26 @@ function PlacesVisitedBox({
   places,
 }: {
   loading: boolean;
-  onPress: () => void;
+  onPress?: () => void;
   places: LocationVisitSummary[];
 }) {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const totalVisits = places.reduce((total, place) => total + place.visitCount, 0);
+  const mostRecentVisit = places.reduce<LocationVisitSummary | undefined>((latest, place) => {
+    if (!latest) return place;
+    return Date.parse(place.lastVisitedAt) > Date.parse(latest.lastVisitedAt) ? place : latest;
+  }, undefined);
 
   return (
     <Pressable
-      accessibilityHint="Opens your visited place logs"
-      accessibilityRole="button"
+      accessibilityHint={onPress ? 'Opens your visited place logs' : undefined}
+      accessibilityRole={onPress ? 'button' : undefined}
+      disabled={!onPress}
       onPress={onPress}
       style={({ pressed }) => [styles.placesBox, pressed && styles.pressed]}
     >
-      <View>
+      <View style={styles.placesContent}>
         <Text style={styles.placesLabel}>PLACES VISITED</Text>
         {loading ? (
           <ActivityIndicator color={colors.tealDark} size="small" style={styles.placesLoader} />
@@ -492,13 +520,29 @@ function PlacesVisitedBox({
             {totalVisits === 1 ? 'visit' : 'visits'}
           </Text>
         )}
+        {!loading ? (
+          <View style={styles.recentVisit}>
+            <Text style={styles.recentVisitLabel}>MOST RECENT VISIT</Text>
+            <Text style={styles.recentVisitValue}>
+              {mostRecentVisit
+                ? `${mostRecentVisit.location} · ${formatVisitDate(mostRecentVisit.lastVisitedAt)}`
+                : 'NO VISITS YET'}
+            </Text>
+          </View>
+        ) : null}
       </View>
-      <Text style={styles.placesArrow}>→</Text>
+      {onPress ? <Text style={styles.placesArrow}>→</Text> : null}
     </Pressable>
   );
 }
 
-function FriendsPanel({ friends }: { friends: FriendProfile[] }) {
+function FriendsPanel({
+  friends,
+  onPress,
+}: {
+  friends: FriendProfile[];
+  onPress: (friend: FriendProfile) => void;
+}) {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -508,10 +552,21 @@ function FriendsPanel({ friends }: { friends: FriendProfile[] }) {
       <View style={styles.friendList}>
         {friends.length ? (
           friends.map((friend) => (
-            <View key={friend.authUserId} style={styles.friendRow}>
-              <View style={styles.friendAvatar}>
-                <Text style={styles.friendInitials}>{initials(friend.displayName)}</Text>
-              </View>
+            <Pressable
+              accessibilityHint="Opens their profile"
+              accessibilityLabel={`View ${friend.displayName}'s profile`}
+              accessibilityRole="button"
+              key={friend.authUserId}
+              onPress={() => onPress(friend)}
+              style={({ pressed }) => [styles.friendRow, pressed && styles.pressed]}
+            >
+              {friend.avatarUrl ? (
+                <Image source={{ uri: friend.avatarUrl }} style={styles.friendAvatar} />
+              ) : (
+                <View style={styles.friendAvatar}>
+                  <Text style={styles.friendInitials}>{initials(friend.displayName)}</Text>
+                </View>
+              )}
               <View style={styles.friendCopy}>
                 <Text style={styles.friendName}>{friend.displayName}</Text>
                 <Text numberOfLines={1} style={styles.friendEmail}>
@@ -519,7 +574,7 @@ function FriendsPanel({ friends }: { friends: FriendProfile[] }) {
                 </Text>
               </View>
               <Text style={styles.friendMark}>✧</Text>
-            </View>
+            </Pressable>
           ))
         ) : (
           <Text style={styles.emptyFriends}>NO FRIENDS TO SHOW YET.</Text>
@@ -527,6 +582,16 @@ function FriendsPanel({ friends }: { friends: FriendProfile[] }) {
       </View>
     </View>
   );
+}
+
+function formatVisitDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'DATE UNKNOWN';
+  return date.toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
 }
 
 function PaperSpeckles() {
@@ -669,6 +734,7 @@ function createStyles(colors: AppColors) {
       fontSize: 10,
       letterSpacing: 1,
     },
+    placesContent: { flex: 1, paddingRight: 10 },
     placesCount: {
       color: colors.black,
       fontFamily: FONTS.secondary,
@@ -676,6 +742,25 @@ function createStyles(colors: AppColors) {
       marginTop: 6,
     },
     placesLoader: { alignSelf: 'flex-start', marginTop: 7 },
+    recentVisit: {
+      borderTopColor: colors.mutedBorder,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      marginTop: 10,
+      paddingTop: 9,
+    },
+    recentVisitLabel: {
+      color: colors.primary,
+      fontFamily: FONTS.primaryBold,
+      fontSize: 8,
+      letterSpacing: 0.8,
+    },
+    recentVisitValue: {
+      color: colors.text,
+      fontFamily: FONTS.primary,
+      fontSize: 10,
+      lineHeight: 15,
+      marginTop: 3,
+    },
     placesArrow: { color: colors.primary, fontFamily: FONTS.primary, fontSize: 24 },
     error: {
       backgroundColor: 'rgba(156,65,65,0.10)',

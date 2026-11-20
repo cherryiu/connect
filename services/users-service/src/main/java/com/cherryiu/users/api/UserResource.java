@@ -50,6 +50,15 @@ public class UserResource {
     }
 
     @GET
+    @Path("/profiles/{userId}")
+    @Operation(summary = "Get a user profile")
+    public UserProfileResponse getProfile(@PathParam("userId") String userId) {
+        // Resolve the current user first so anonymous requests cannot read profiles.
+        currentUserId();
+        return userBusinessLogic.getProfile(userId);
+    }
+
+    @GET
     @Path("/friends")
     @Operation(summary = "Get the current user's friends")
     public Response getFriends() {

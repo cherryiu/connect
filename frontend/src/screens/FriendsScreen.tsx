@@ -152,6 +152,7 @@ export default function FriendsScreen() {
             friends={friends}
             label="YOUR FRIENDS"
             loading={loadingFriends}
+            onPress={(friend) => navigation.navigate('ViewProfileScreen', { friend })}
           />
         </ScrollView>
 
@@ -174,6 +175,7 @@ function FriendSection({
   label,
   loading = false,
   onAdd,
+  onPress,
 }: {
   addingId?: string;
   emptyMessage: string;
@@ -181,6 +183,7 @@ function FriendSection({
   label: string;
   loading?: boolean;
   onAdd?: (friend: FriendProfile) => Promise<void>;
+  onPress?: (friend: FriendProfile) => void;
 }) {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -199,7 +202,15 @@ function FriendSection({
           </View>
         ) : friends.length ? (
           friends.map((friend) => (
-            <View key={friend.authUserId} style={styles.friendRow}>
+            <Pressable
+              accessibilityHint={onPress ? 'Opens their profile' : undefined}
+              accessibilityLabel={onPress ? `View ${friend.displayName}'s profile` : undefined}
+              accessibilityRole={onPress ? 'button' : undefined}
+              disabled={!onPress}
+              key={friend.authUserId}
+              onPress={() => onPress?.(friend)}
+              style={({ pressed }) => [styles.friendRow, pressed && styles.pressed]}
+            >
               {friend.avatarUrl ? (
                 <Image source={{ uri: friend.avatarUrl }} style={styles.avatar} />
               ) : (
@@ -230,7 +241,7 @@ function FriendSection({
               ) : (
                 <Text style={styles.friendMark}>✧</Text>
               )}
-            </View>
+            </Pressable>
           ))
         ) : (
           <Text style={styles.emptyText}>{emptyMessage}</Text>

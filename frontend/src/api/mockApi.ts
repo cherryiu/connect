@@ -178,6 +178,25 @@ async function handleMockRequest(config: InternalAxiosRequestConfig) {
     return mockResponse(config, 200, currentMockProfile);
   }
 
+  const userProfileMatch = path.match(/^\/api\/users\/profiles\/([^/]+)$/);
+  if (method === 'GET' && userProfileMatch) {
+    const authUserId = decodeURIComponent(userProfileMatch[1]);
+    const friend = [...friends, ...discoverableUsers].find(
+      (candidate) => candidate.authUserId === authUserId,
+    );
+    if (!friend) return mockResponse(config, 404, { message: 'User not found' });
+    return mockResponse<UserProfileResponse>(config, 200, {
+      avatarUrl: friend.avatarUrl,
+      bio: undefined,
+      createdAt: now,
+      displayName: friend.displayName,
+      email: friend.email,
+      id: friend.authUserId,
+      role: 'USER',
+      updatedAt: now,
+    });
+  }
+
   if (method === 'PUT' && path === '/api/users/update') {
     const body = requestBody<UserProfileUpdateRequest>(config);
     const emailTaken = users.some(
