@@ -1,7 +1,9 @@
+import { useMemo } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { FriendProfile } from '../../api/usersApi';
-import { COLORS, FONTS } from '../../constants';
+import { FONTS } from '../../constants';
+import { type AppColors, useTheme } from '../../context/ThemeContext';
 
 type Props = {
   error?: string;
@@ -12,13 +14,16 @@ type Props = {
 };
 
 export default function FriendSelector({ error, friends, loading, onToggle, selectedIds }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   return (
     <View style={styles.field}>
       <Text style={styles.label}>INVITE FRIENDS</Text>
       <View style={styles.list}>
         {loading ? (
           <View style={styles.messageRow}>
-            <ActivityIndicator color={COLORS.tealDark} size="small" />
+            <ActivityIndicator color={colors.tealDark} size="small" />
             <Text style={styles.message}>LOADING FRIENDS...</Text>
           </View>
         ) : error ? (
@@ -71,53 +76,55 @@ function initials(displayName: string) {
     .join('');
 }
 
-const styles = StyleSheet.create({
-  field: { marginBottom: 18 },
-  label: {
-    color: COLORS.text,
-    fontFamily: FONTS.primary,
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 1.3,
-    marginBottom: 7,
-  },
-  list: {
-    backgroundColor: 'rgba(255,255,255,0.45)',
-    borderColor: COLORS.teal,
-    borderWidth: 1.5,
-    padding: 8,
-  },
-  friend: {
-    alignItems: 'center',
-    borderBottomColor: 'rgba(132,165,157,0.25)',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    flexDirection: 'row',
-    minHeight: 54,
-    paddingHorizontal: 7,
-    paddingVertical: 6,
-  },
-  selectedFriend: { backgroundColor: 'rgba(132,165,157,0.14)' },
-  pressedFriend: { opacity: 0.65 },
-  avatar: {
-    alignItems: 'center',
-    backgroundColor: 'rgba(132,165,157,0.18)',
-    borderColor: COLORS.teal,
-    borderRadius: 18,
-    borderWidth: 1,
-    height: 36,
-    justifyContent: 'center',
-    marginRight: 10,
-    width: 36,
-  },
-  selectedAvatar: { backgroundColor: COLORS.tealDark },
-  initials: { color: COLORS.tealDark, fontFamily: FONTS.primary, fontSize: 10 },
-  selectedInitials: { color: '#fff' },
-  copy: { flex: 1 },
-  name: { color: COLORS.black, fontFamily: FONTS.secondary, fontSize: 14 },
-  email: { color: COLORS.muted, fontFamily: FONTS.primary, fontSize: 9, marginTop: 2 },
-  check: { color: COLORS.muted, fontFamily: FONTS.primary, fontSize: 16, marginLeft: 8 },
-  selectedCheck: { color: COLORS.tealDark, fontWeight: '700' },
-  messageRow: { alignItems: 'center', flexDirection: 'row', gap: 9, padding: 12 },
-  message: { color: COLORS.muted, fontFamily: FONTS.primary, fontSize: 10, padding: 12 },
-  error: { color: COLORS.primary, fontFamily: FONTS.primary, fontSize: 10, padding: 12 },
-});
+function createStyles(colors: AppColors) {
+  return StyleSheet.create({
+    field: { marginBottom: 18 },
+    label: {
+      color: colors.text,
+      fontFamily: FONTS.primary,
+      fontSize: 10,
+      fontWeight: '700',
+      letterSpacing: 1.3,
+      marginBottom: 7,
+    },
+    list: {
+      backgroundColor: colors.surface,
+      borderColor: colors.teal,
+      borderWidth: 1.5,
+      padding: 8,
+    },
+    friend: {
+      alignItems: 'center',
+      borderBottomColor: 'rgba(132,165,157,0.25)',
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      flexDirection: 'row',
+      minHeight: 54,
+      paddingHorizontal: 7,
+      paddingVertical: 6,
+    },
+    selectedFriend: { backgroundColor: 'rgba(132,165,157,0.14)' },
+    pressedFriend: { opacity: 0.65 },
+    avatar: {
+      alignItems: 'center',
+      backgroundColor: 'rgba(132,165,157,0.18)',
+      borderColor: colors.teal,
+      borderRadius: 18,
+      borderWidth: 1,
+      height: 36,
+      justifyContent: 'center',
+      marginRight: 10,
+      width: 36,
+    },
+    selectedAvatar: { backgroundColor: colors.tealDark },
+    initials: { color: colors.tealDark, fontFamily: FONTS.primary, fontSize: 10 },
+    selectedInitials: { color: '#fff' },
+    copy: { flex: 1 },
+    name: { color: colors.black, fontFamily: FONTS.secondary, fontSize: 14 },
+    email: { color: colors.muted, fontFamily: FONTS.primary, fontSize: 9, marginTop: 2 },
+    check: { color: colors.muted, fontFamily: FONTS.primary, fontSize: 16, marginLeft: 8 },
+    selectedCheck: { color: colors.tealDark, fontWeight: '700' },
+    messageRow: { alignItems: 'center', flexDirection: 'row', gap: 9, padding: 12 },
+    message: { color: colors.muted, fontFamily: FONTS.primary, fontSize: 10, padding: 12 },
+    error: { color: colors.primary, fontFamily: FONTS.primary, fontSize: 10, padding: 12 },
+  });
+}

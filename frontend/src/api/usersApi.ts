@@ -22,6 +22,10 @@ export type UserProfileRequest = {
   bio?: string;
 };
 
+export type UserProfileUpdateRequest = Omit<UserProfileRequest, 'password'> & {
+  password?: string;
+};
+
 export type FriendProfile = {
   authUserId: string;
   avatarUrl?: string;
@@ -34,6 +38,14 @@ export async function getCurrentUser() {
   return response.data;
 }
 
+/** Returns the public profile details needed to render another user's profile page. */
+export async function getUserProfile(authUserId: string) {
+  const response = await API.get<UserProfileResponse>(
+    `/api/users/profiles/${encodeURIComponent(authUserId)}`,
+  );
+  return response.data;
+}
+
 export async function getFriends() {
   const response = await API.get<FriendProfile[]>('/api/users/friends');
   return response.data;
@@ -43,12 +55,19 @@ export async function addFriend(authUserId: string) {
   await API.post(`/api/users/friends/${encodeURIComponent(authUserId)}`);
 }
 
+export async function searchUsers(query: string) {
+  const response = await API.get<FriendProfile[]>('/api/users/search', {
+    params: { q: query.trim() },
+  });
+  return response.data;
+}
+
 export async function createUser(body: UserProfileRequest) {
   const response = await API.post<UserProfileResponse>('/api/users/register', body);
   return response.data;
 }
 
-export async function updateCurrentUser(body: UserProfileRequest) {
+export async function updateCurrentUser(body: UserProfileUpdateRequest) {
   const response = await API.put<UserProfileResponse>('/api/users/update', body);
   return response.data;
 }

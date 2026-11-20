@@ -1,7 +1,8 @@
 // frontend/src/components/forms/FormTextInput.tsx
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Text, TextInput, View, StyleSheet, TextInputProps } from 'react-native';
-import { COLORS, FONTS } from '../../constants';
+import { FONTS } from '../../constants';
+import { type AppColors, useTheme } from '../../context/ThemeContext';
 
 type Props = Omit<TextInputProps, 'style'> & {
   title: string;
@@ -18,6 +19,8 @@ export default function FormTextInput({
   multiline,
   ...inputProps
 }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const isHangout = variant === 'hangout';
 
   return (
@@ -27,7 +30,7 @@ export default function FormTextInput({
         <TextInput
           autoCapitalize="sentences"
           multiline={multiline}
-          placeholderTextColor="rgba(85,66,65,0.42)"
+          placeholderTextColor={colors.placeholder}
           style={[styles.hangoutInput, multiline && styles.multilineInput]}
           {...inputProps}
         />
@@ -41,7 +44,7 @@ export default function FormTextInput({
         >
           <TextInput
             multiline={multiline}
-            placeholderTextColor="rgba(85,66,65,0.42)"
+            placeholderTextColor={colors.placeholder}
             style={[styles.loginInput, multiline && styles.loginMultilineInput]}
             {...inputProps}
           />
@@ -52,62 +55,64 @@ export default function FormTextInput({
   );
 }
 
-const styles = StyleSheet.create({
-  loginField: { width: '100%' },
-  loginTitle: {
-    color: COLORS.text,
-    fontFamily: FONTS.primary,
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 1.3,
-    marginBottom: 7,
-  },
-  loginInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-    height: 50,
-    backgroundColor: '#f1f1f1',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    marginBottom: 20,
-  },
-  loginInputContainerWithError: { marginBottom: 6 },
-  loginMultilineContainer: { height: 96 },
-  loginInput: {
-    flex: 1,
-    height: '100%',
-    fontFamily: FONTS.secondary,
-    fontSize: 15,
-    color: COLORS.black,
-  },
-  loginMultilineInput: { paddingVertical: 12, textAlignVertical: 'top' },
-  hangoutField: { marginBottom: 18 },
-  hangoutTitle: {
-    color: COLORS.text,
-    fontFamily: FONTS.primary,
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 1.3,
-    marginBottom: 7,
-  },
-  hangoutInput: {
-    backgroundColor: 'rgba(255,255,255,0.45)',
-    borderColor: COLORS.teal,
-    borderWidth: 1.5,
-    color: COLORS.black,
-    fontFamily: FONTS.secondary,
-    fontSize: 15,
-    minHeight: 48,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  multilineInput: { minHeight: 120, textAlignVertical: 'top' },
-  errorText: {
-    alignSelf: 'flex-start',
-    color: COLORS.primary,
-    fontFamily: FONTS.primary,
-    fontSize: 11,
-    marginBottom: 10,
-  },
-});
+function createStyles(colors: AppColors) {
+  return StyleSheet.create({
+    loginField: { width: '100%' },
+    loginTitle: {
+      color: colors.text,
+      fontFamily: FONTS.primary,
+      fontSize: 10,
+      fontWeight: '700',
+      letterSpacing: 1.3,
+      marginBottom: 7,
+    },
+    loginInputContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      width: '100%',
+      height: 50,
+      backgroundColor: colors.surface,
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      marginBottom: 20,
+    },
+    loginInputContainerWithError: { marginBottom: 6 },
+    loginMultilineContainer: { height: 96 },
+    loginInput: {
+      flex: 1,
+      height: '100%',
+      fontFamily: FONTS.secondary,
+      fontSize: 15,
+      color: colors.black,
+    },
+    loginMultilineInput: { paddingVertical: 12, textAlignVertical: 'top' },
+    hangoutField: { marginBottom: 18 },
+    hangoutTitle: {
+      color: colors.text,
+      fontFamily: FONTS.primary,
+      fontSize: 10,
+      fontWeight: '700',
+      letterSpacing: 1.3,
+      marginBottom: 7,
+    },
+    hangoutInput: {
+      backgroundColor: colors.surface,
+      borderColor: colors.teal,
+      borderWidth: 1.5,
+      color: colors.black,
+      fontFamily: FONTS.secondary,
+      fontSize: 15,
+      minHeight: 48,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+    },
+    multilineInput: { minHeight: 120, textAlignVertical: 'top' },
+    errorText: {
+      alignSelf: 'flex-start',
+      color: colors.primary,
+      fontFamily: FONTS.primary,
+      fontSize: 11,
+      marginBottom: 10,
+    },
+  });
+}

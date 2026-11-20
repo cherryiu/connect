@@ -3,6 +3,7 @@ package com.cherryiu.users.businesslogic;
 import com.cherryiu.users.dto.FriendProfileResponse;
 import com.cherryiu.users.dto.UserProfileRequest;
 import com.cherryiu.users.dto.UserProfileResponse;
+import com.cherryiu.users.dto.UpdateUserProfileRequest;
 import com.cherryiu.users.exception.UserNotFoundException;
 import com.cherryiu.users.mapper.ResponseMapper;
 import com.cherryiu.users.model.UserProfile;
@@ -16,6 +17,7 @@ import jakarta.ws.rs.core.Response;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Locale;
@@ -46,7 +48,7 @@ public class UserBusinessLogic {
         return responseMapper.toUserResponse(profile);
     }
 
-    public UserProfileResponse updateProfile(String userId, UserProfileRequest request) {
+    public UserProfileResponse updateProfile(String userId, UpdateUserProfileRequest request) {
         UserProfile profile = findProfileOrThrow(userId);
         String email = normalizeEmail(request.email());
         boolean emailTaken = userProfileRepository.findByEmail(email)
@@ -69,6 +71,28 @@ public class UserBusinessLogic {
         return profile.friendIds.stream()
                 .map(userProfileRepository::findByIdOptional)
                 .flatMap(Optional::stream)
+                .map(responseMapper::toFriendResponse)
+                .sorted(Comparator.comparing(
+                        FriendProfileResponse::displayName,
+                        String.CASE_INSENSITIVE_ORDER
+                ))
+                .toList();
+    }
+
+    public List<FriendProfileResponse> searchUsers(String userId, String rawQuery) {
+        String query = rawQuery == null ? "" : rawQuery.trim();
+        if (query.isEmpty()) {
+            throw new BadRequestException("A search term is required");
+        }
+
+        UserProfile profile = findProfileOrThrow(userId);
+        var excludedIds = new HashSet<ObjectId>();
+        excludedIds.add(profile.id);
+        if (profile.friendIds != null) {
+            excludedIds.addAll(profile.friendIds);
+        }
+
+        return userProfileRepository.search(query, excludedIds).stream()
                 .map(responseMapper::toFriendResponse)
                 .sorted(Comparator.comparing(
                         FriendProfileResponse::displayName,

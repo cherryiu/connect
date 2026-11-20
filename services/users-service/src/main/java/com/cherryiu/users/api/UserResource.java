@@ -3,6 +3,7 @@ package com.cherryiu.users.api;
 import com.cherryiu.users.businesslogic.UserBusinessLogic;
 import com.cherryiu.users.dto.UserProfileRequest;
 import com.cherryiu.users.dto.UserProfileResponse;
+import com.cherryiu.users.dto.UpdateUserProfileRequest;
 import io.quarkus.security.UnauthorizedException;
 import io.quarkus.security.identity.SecurityIdentity;
 import jakarta.annotation.security.PermitAll;
@@ -13,6 +14,7 @@ import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
@@ -48,10 +50,26 @@ public class UserResource {
     }
 
     @GET
+    @Path("/profiles/{userId}")
+    @Operation(summary = "Get a user profile")
+    public UserProfileResponse getProfile(@PathParam("userId") String userId) {
+        // Resolve the current user first so anonymous requests cannot read profiles.
+        currentUserId();
+        return userBusinessLogic.getProfile(userId);
+    }
+
+    @GET
     @Path("/friends")
     @Operation(summary = "Get the current user's friends")
     public Response getFriends() {
         return Response.ok(userBusinessLogic.getFriends(currentUserId())).build();
+    }
+
+    @GET
+    @Path("/search")
+    @Operation(summary = "Search for users who are not already friends")
+    public Response searchUsers(@QueryParam("q") String query) {
+        return Response.ok(userBusinessLogic.searchUsers(currentUserId(), query)).build();
     }
 
     @POST
@@ -74,7 +92,7 @@ public class UserResource {
     @PUT
     @Path("/update")
     @Operation(summary = "Update the current user profile")
-    public UserProfileResponse updateProfile(@Valid UserProfileRequest request) {
+    public UserProfileResponse updateProfile(@Valid UpdateUserProfileRequest request) {
         return userBusinessLogic.updateProfile(currentUserId(), request);
     }
 
