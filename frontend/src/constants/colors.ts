@@ -1,6 +1,7 @@
 export const COLORS = {
   primary: '#9C4141',
   background: '#E2D9CE',
+  dateBadgeText: '#E2D9CE',
   surface: '#fff8f3',
   text: '#554241',
   muted: '#887271',
@@ -12,6 +13,7 @@ export const COLORS = {
   coral: '#F28482',
   accent: '#F28482',
   teal: '#84a59d',
+  tealSoft: '#DCE8E5',
   tealDark: '#45645e',
 };
 

@@ -1,7 +1,9 @@
+import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { Hangout } from '../../api/hangoutsApi';
-import { COLORS, FONTS } from '../../constants';
+import { FONTS } from '../../constants';
+import { useTheme, type AppColors } from '../../context/ThemeContext';
 
 type Props = {
   hangout: Hangout;
@@ -9,6 +11,8 @@ type Props = {
 };
 
 export default function HangoutCard({ hangout, onPress }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const hasPassed = Date.parse(hangout.endTime) < Date.now();
 
   return (
@@ -40,15 +44,21 @@ export default function HangoutCard({ hangout, onPress }: Props) {
 }
 
 export function HangoutDateBadge({ startTime }: { startTime: string }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   return <Text style={styles.dateBadge}>{formatDateBadge(startTime)}</Text>;
 }
 
 export function HangoutPassedBadge({ endTime }: { endTime: string }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   if (Date.parse(endTime) >= Date.now()) return null;
   return <Text style={styles.passedBadge}>HANGOUT PASSED</Text>;
 }
 
 export function HangoutUpcomingBadge({ startTime }: { startTime: string }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const label = formatUpcomingLabel(startTime);
   return label ? <Text style={styles.upcomingBadge}>{label}</Text> : null;
 }
@@ -75,6 +85,8 @@ export function formatUpcomingLabel(startTime: string, nowTimestamp = Date.now()
 }
 
 function AvatarStack({ count }: { count: number }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   return (
     <View style={styles.avatarStack}>
       {Array.from({ length: Math.min(count, 3) }).map((_, index) => (
@@ -83,7 +95,7 @@ function AvatarStack({ count }: { count: number }) {
           style={[
             styles.avatar,
             {
-              backgroundColor: [COLORS.coral, '#c89cff', '#8dded1'][index],
+              backgroundColor: [colors.coral, '#8B7898', colors.teal][index],
               marginLeft: index ? -8 : 0,
             },
           ]}
@@ -106,95 +118,97 @@ function formatDateBadge(value: string) {
   return `${datePart} · ${timePart}`;
 }
 
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: COLORS.surface,
-    // backgroundColor: 'rgba(255,252,248,0.90)',
-    borderColor: COLORS.tealDark,
-    borderRadius: 8,
-    borderWidth: 2,
-    marginBottom: 16,
-    padding: 16,
-    shadowColor: COLORS.teal,
-    shadowOffset: { height: 6, width: 6 },
-    shadowOpacity: 0.75,
-    shadowRadius: 0,
-    width: '76%',
-  },
-  passedCard: {
-    borderColor: COLORS.muted,
-    shadowColor: COLORS.muted,
-  },
-  badgeRow: {
-    alignItems: 'flex-start',
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  dateBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: COLORS.yellow,
-    borderColor: COLORS.teal,
-    borderWidth: 1,
-    color: '#211e1c',
-    fontFamily: FONTS.primary,
-    fontSize: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-  },
-  passedBadge: {
-    backgroundColor: 'rgba(156,65,65,0.12)',
-    borderColor: COLORS.primary,
-    borderWidth: 1,
-    color: COLORS.primary,
-    fontFamily: FONTS.primaryBold,
-    fontSize: 10,
-    letterSpacing: 0.5,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-  },
-  upcomingBadge: {
-    backgroundColor: 'rgba(132,165,157,0.18)',
-    borderColor: COLORS.tealDark,
-    borderWidth: 1,
-    color: COLORS.tealDark,
-    fontFamily: FONTS.primaryBold,
-    fontSize: 10,
-    letterSpacing: 0.5,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-  },
-  title: {
-    color: '#211e1c',
-    fontFamily: FONTS.secondary,
-    fontSize: 24,
-    marginBottom: 8,
-    marginTop: 8,
-    // textTransform: 'lowercase',
-  },
-  detailsRow: {
-    alignItems: 'flex-start',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  copy: { flex: 1, paddingRight: 8 },
-  metadata: {
-    color: COLORS.text,
-    fontFamily: FONTS.primary,
-    fontSize: 11.5,
-    letterSpacing: 1.2,
-    lineHeight: 20,
-    textTransform: 'uppercase',
-  },
-  avatarStack: { flexDirection: 'row', paddingTop: 4 },
-  avatar: {
-    alignItems: 'center',
-    borderColor: '#fff',
-    borderRadius: 12,
-    borderWidth: 2,
-    height: 25,
-    justifyContent: 'center',
-    width: 25,
-  },
-  avatarText: { color: '#fff', fontSize: 10 },
-});
+function createStyles(colors: AppColors) {
+  return StyleSheet.create({
+    card: {
+      backgroundColor: colors.surface,
+      // backgroundColor: 'rgba(255,252,248,0.90)',
+      borderColor: colors.tealDark,
+      borderRadius: 8,
+      borderWidth: 2,
+      marginBottom: 16,
+      padding: 16,
+      shadowColor: colors.teal,
+      shadowOffset: { height: 6, width: 6 },
+      shadowOpacity: 0.75,
+      shadowRadius: 0,
+      width: '76%',
+    },
+    passedCard: {
+      borderColor: colors.muted,
+      shadowColor: colors.muted,
+    },
+    badgeRow: {
+      alignItems: 'flex-start',
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 6,
+    },
+    dateBadge: {
+      alignSelf: 'flex-start',
+      backgroundColor: colors.yellow,
+      borderColor: colors.teal,
+      borderWidth: 1,
+      color: colors.dateBadgeText,
+      fontFamily: FONTS.primary,
+      fontSize: 12,
+      paddingHorizontal: 8,
+      paddingVertical: 5,
+    },
+    passedBadge: {
+      backgroundColor: 'rgba(156,65,65,0.12)',
+      borderColor: colors.primary,
+      borderWidth: 1,
+      color: colors.primary,
+      fontFamily: FONTS.primaryBold,
+      fontSize: 10,
+      letterSpacing: 0.5,
+      paddingHorizontal: 8,
+      paddingVertical: 6,
+    },
+    upcomingBadge: {
+      backgroundColor: 'rgba(132,165,157,0.18)',
+      borderColor: colors.tealDark,
+      borderWidth: 1,
+      color: colors.tealDark,
+      fontFamily: FONTS.primaryBold,
+      fontSize: 10,
+      letterSpacing: 0.5,
+      paddingHorizontal: 8,
+      paddingVertical: 6,
+    },
+    title: {
+      color: colors.black,
+      fontFamily: FONTS.secondary,
+      fontSize: 24,
+      marginBottom: 8,
+      marginTop: 8,
+      // textTransform: 'lowercase',
+    },
+    detailsRow: {
+      alignItems: 'flex-start',
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+    },
+    copy: { flex: 1, paddingRight: 8 },
+    metadata: {
+      color: colors.text,
+      fontFamily: FONTS.primary,
+      fontSize: 11.5,
+      letterSpacing: 1.2,
+      lineHeight: 20,
+      textTransform: 'uppercase',
+    },
+    avatarStack: { flexDirection: 'row', paddingTop: 4 },
+    avatar: {
+      alignItems: 'center',
+      borderColor: colors.surface,
+      borderRadius: 12,
+      borderWidth: 2,
+      height: 25,
+      justifyContent: 'center',
+      width: 25,
+    },
+    avatarText: { color: '#fff', fontSize: 10 },
+  });
+}

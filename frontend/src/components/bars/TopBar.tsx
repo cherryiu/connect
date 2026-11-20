@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
@@ -8,12 +8,14 @@ import {
   Modal,
   Pressable,
   StyleSheet,
+  Switch,
   Text,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { COLORS, IMAGES, FONTS } from '../../constants';
+import { IMAGES, FONTS } from '../../constants';
+import { useTheme, type AppColors } from '../../context/ThemeContext';
 import { RootStackParamList } from '../../navigation/RootNavigator';
 
 type TopBarProps = {
@@ -25,6 +27,8 @@ type MenuNavigation = NativeStackNavigationProp<RootStackParamList, 'ViewProfile
 
 export default function TopBar({ avatarUrl, onLogout }: TopBarProps) {
   const navigation = useNavigation<MenuNavigation>();
+  const { colors, isDarkMode, setDarkMode } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
@@ -112,6 +116,17 @@ export default function TopBar({ avatarUrl, onLogout }: TopBarProps) {
               <Text style={styles.menuItemText}>APP SETTINGS</Text>
               <Text style={styles.menuItemArrow}>→</Text>
             </Pressable>
+            <View style={styles.menuItem}>
+              <Text style={styles.menuItemIcon}>☾</Text>
+              <Text style={styles.menuItemText}>DARK MODE</Text>
+              <Switch
+                accessibilityLabel="Dark mode"
+                onValueChange={setDarkMode}
+                thumbColor={isDarkMode ? colors.surface : '#fffaf5'}
+                trackColor={{ false: '#cfc6bd', true: colors.teal }}
+                value={isDarkMode}
+              />
+            </View>
 
             <View style={styles.sidebarSpacer} />
             <Pressable
@@ -121,7 +136,7 @@ export default function TopBar({ avatarUrl, onLogout }: TopBarProps) {
               style={({ pressed }) => [styles.logoutButton, pressed && styles.menuItemPressed]}
             >
               {loggingOut ? (
-                <ActivityIndicator color={COLORS.primary} size="small" />
+                <ActivityIndicator color={colors.primary} size="small" />
               ) : (
                 <Text style={styles.logoutText}>LOG OUT</Text>
               )}
@@ -133,115 +148,117 @@ export default function TopBar({ avatarUrl, onLogout }: TopBarProps) {
   );
 }
 
-const styles = StyleSheet.create({
-  topBar: {
-    alignItems: 'center',
-    backgroundColor: '#fbf5ef',
-    flexDirection: 'row',
-    height: 64,
-    justifyContent: 'space-between',
-    paddingHorizontal: 18,
-    zIndex: 20,
-  },
-  rightActions: { alignItems: 'center', flexDirection: 'row' },
-  dotsButton: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    height: 38,
-    justifyContent: 'center',
-    marginRight: 8,
-    width: 30,
-  },
-  dot: {
-    backgroundColor: COLORS.primary,
-    borderRadius: 2.5,
-    height: 5,
-    marginHorizontal: 1.5,
-    width: 5,
-  },
-  brand: {
-    color: COLORS.black,
-    fontFamily: FONTS.secondaryBold,
-    fontSize: 24,
-    letterSpacing: -0.4,
-  },
-  avatar: {
-    borderColor: COLORS.tealDark,
-    borderWidth: 1.5,
-    height: 40,
-    width: 40,
-    borderRadius: 20,
-  },
-  pressed: { opacity: 0.55 },
-  modalRoot: { flex: 1, flexDirection: 'row' },
-  sidebar: {
-    backgroundColor: '#fbf5ef',
-    borderLeftColor: COLORS.teal,
-    borderLeftWidth: 1.5,
-    paddingHorizontal: 20,
-    shadowColor: '#000',
-    shadowOffset: { height: 0, width: -5 },
-    shadowOpacity: 0.16,
-    shadowRadius: 12,
-    width: '78%',
-    zIndex: 2,
-  },
-  backdrop: { backgroundColor: 'rgba(31,27,20,0.28)', flex: 1 },
-  sidebarHeading: {
-    alignItems: 'center',
-    borderBottomColor: 'rgba(132,165,157,0.32)',
-    borderBottomWidth: 1,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    minHeight: 64,
-  },
-  sidebarBrandRow: { alignItems: 'center', flexDirection: 'row' },
-  sidebarBrand: {
-    color: COLORS.black,
-    fontFamily: FONTS.secondaryBold,
-    fontSize: 24,
-    letterSpacing: -0.4,
-  },
-  close: { color: COLORS.primary, fontFamily: FONTS.secondaryLight, fontSize: 32 },
-  sidebarLabel: {
-    color: COLORS.muted,
-    fontFamily: FONTS.primaryBold,
-    fontSize: 9,
-    letterSpacing: 1.2,
-    marginBottom: 8,
-    marginTop: 28,
-  },
-  menuItem: {
-    alignItems: 'center',
-    borderBottomColor: 'rgba(132,165,157,0.26)',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    flexDirection: 'row',
-    minHeight: 54,
-    paddingHorizontal: 4,
-  },
-  menuItemPressed: { backgroundColor: 'rgba(132,165,157,0.12)', opacity: 0.7 },
-  menuItemIcon: { color: COLORS.tealDark, fontSize: 18, marginRight: 12 },
-  menuItemText: {
-    color: COLORS.black,
-    flex: 1,
-    fontFamily: FONTS.primaryBold,
-    fontSize: 11,
-    letterSpacing: 0.7,
-  },
-  menuItemArrow: { color: COLORS.primary, fontFamily: FONTS.primary, fontSize: 18 },
-  sidebarSpacer: { flex: 1 },
-  logoutButton: {
-    alignItems: 'center',
-    borderColor: COLORS.primary,
-    borderWidth: 1.5,
-    justifyContent: 'center',
-    marginBottom: 22,
-    minHeight: 46,
-  },
-  logoutText: {
-    color: COLORS.primary,
-    fontFamily: FONTS.primaryBold,
-    fontSize: 10,
-    letterSpacing: 0.9,
-  },
-});
+function createStyles(colors: AppColors) {
+  return StyleSheet.create({
+    topBar: {
+      alignItems: 'center',
+      backgroundColor: colors.background,
+      flexDirection: 'row',
+      height: 64,
+      justifyContent: 'space-between',
+      paddingHorizontal: 18,
+      zIndex: 20,
+    },
+    rightActions: { alignItems: 'center', flexDirection: 'row' },
+    dotsButton: {
+      alignItems: 'center',
+      flexDirection: 'row',
+      height: 38,
+      justifyContent: 'center',
+      marginRight: 8,
+      width: 30,
+    },
+    dot: {
+      backgroundColor: colors.primary,
+      borderRadius: 2.5,
+      height: 5,
+      marginHorizontal: 1.5,
+      width: 5,
+    },
+    brand: {
+      color: colors.black,
+      fontFamily: FONTS.secondaryBold,
+      fontSize: 24,
+      letterSpacing: -0.4,
+    },
+    avatar: {
+      borderColor: colors.tealDark,
+      borderWidth: 1.5,
+      height: 40,
+      width: 40,
+      borderRadius: 20,
+    },
+    pressed: { opacity: 0.55 },
+    modalRoot: { flex: 1, flexDirection: 'row' },
+    sidebar: {
+      backgroundColor: colors.background,
+      borderLeftColor: colors.teal,
+      borderLeftWidth: 1.5,
+      paddingHorizontal: 20,
+      shadowColor: '#000',
+      shadowOffset: { height: 0, width: -5 },
+      shadowOpacity: 0.16,
+      shadowRadius: 12,
+      width: '78%',
+      zIndex: 2,
+    },
+    backdrop: { backgroundColor: 'rgba(10,8,7,0.48)', flex: 1 },
+    sidebarHeading: {
+      alignItems: 'center',
+      borderBottomColor: 'rgba(132,165,157,0.32)',
+      borderBottomWidth: 1,
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      minHeight: 64,
+    },
+    sidebarBrandRow: { alignItems: 'center', flexDirection: 'row' },
+    sidebarBrand: {
+      color: colors.black,
+      fontFamily: FONTS.secondaryBold,
+      fontSize: 24,
+      letterSpacing: -0.4,
+    },
+    close: { color: colors.primary, fontFamily: FONTS.secondaryLight, fontSize: 32 },
+    sidebarLabel: {
+      color: colors.muted,
+      fontFamily: FONTS.primaryBold,
+      fontSize: 9,
+      letterSpacing: 1.2,
+      marginBottom: 8,
+      marginTop: 28,
+    },
+    menuItem: {
+      alignItems: 'center',
+      borderBottomColor: 'rgba(132,165,157,0.26)',
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      flexDirection: 'row',
+      minHeight: 54,
+      paddingHorizontal: 4,
+    },
+    menuItemPressed: { backgroundColor: 'rgba(132,165,157,0.12)', opacity: 0.7 },
+    menuItemIcon: { color: colors.tealDark, fontSize: 18, marginRight: 12 },
+    menuItemText: {
+      color: colors.black,
+      flex: 1,
+      fontFamily: FONTS.primaryBold,
+      fontSize: 11,
+      letterSpacing: 0.7,
+    },
+    menuItemArrow: { color: colors.primary, fontFamily: FONTS.primary, fontSize: 18 },
+    sidebarSpacer: { flex: 1 },
+    logoutButton: {
+      alignItems: 'center',
+      borderColor: colors.primary,
+      borderWidth: 1.5,
+      justifyContent: 'center',
+      marginBottom: 22,
+      minHeight: 46,
+    },
+    logoutText: {
+      color: colors.primary,
+      fontFamily: FONTS.primaryBold,
+      fontSize: 10,
+      letterSpacing: 0.9,
+    },
+  });
+}

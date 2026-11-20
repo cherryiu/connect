@@ -3,6 +3,7 @@ import { describe, expect, jest, test } from '@jest/globals';
 
 import type { Hangout } from '../../api/hangoutsApi';
 import HangoutCard, { formatUpcomingLabel } from '../../components/scheduling/HangoutCard';
+import { ThemeProvider } from '../../context/ThemeContext';
 
 const baseHangout: Hangout = {
   authHangoutId: 'hangout-id',
@@ -19,9 +20,17 @@ const baseHangout: Hangout = {
   updatedAt: '2020-01-01T00:00:00.000Z',
 };
 
+function renderHangoutCard(hangout: Hangout) {
+  return render(
+    <ThemeProvider>
+      <HangoutCard hangout={hangout} onPress={jest.fn()} />
+    </ThemeProvider>,
+  );
+}
+
 describe('HangoutCard', () => {
   test('labels a completed hangout as passed', () => {
-    const { getByText } = render(<HangoutCard hangout={baseHangout} onPress={jest.fn()} />);
+    const { getByText } = renderHangoutCard(baseHangout);
 
     expect(getByText('HANGOUT PASSED')).toBeTruthy();
   });
@@ -32,7 +41,7 @@ describe('HangoutCard', () => {
       endTime: '2999-01-01T02:00:00.000Z',
       startTime: '2999-01-01T01:00:00.000Z',
     };
-    const { queryByText } = render(<HangoutCard hangout={futureHangout} onPress={jest.fn()} />);
+    const { queryByText } = renderHangoutCard(futureHangout);
 
     expect(queryByText('HANGOUT PASSED')).toBeNull();
   });
@@ -44,7 +53,7 @@ describe('HangoutCard', () => {
       endTime: new Date(startTime.getTime() + 60 * 60 * 1000).toISOString(),
       startTime: startTime.toISOString(),
     };
-    const { getByText } = render(<HangoutCard hangout={futureHangout} onPress={jest.fn()} />);
+    const { getByText } = renderHangoutCard(futureHangout);
 
     expect(getByText('IN 2 HOURS!')).toBeTruthy();
   });

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
@@ -16,8 +16,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { addFriend, getFriends, searchUsers, type FriendProfile } from '../api/usersApi';
 import BottomNavBar from '../components/bars/BottomNavBar';
 import TopBar from '../components/bars/TopBar';
-import { COLORS, FONTS } from '../constants';
+import { FONTS } from '../constants';
 import { useAuth } from '../context/AuthContext';
+import { type AppColors, useTheme } from '../context/ThemeContext';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 
 type FriendsNavigation = NativeStackNavigationProp<RootStackParamList, 'FriendsScreen'>;
@@ -25,6 +26,8 @@ type FriendsNavigation = NativeStackNavigationProp<RootStackParamList, 'FriendsS
 export default function FriendsScreen() {
   const navigation = useNavigation<FriendsNavigation>();
   const { isLoading: authLoading, isLoggedIn, logout, user } = useAuth();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [friends, setFriends] = useState<FriendProfile[]>([]);
   const [results, setResults] = useState<FriendProfile[]>([]);
   const [query, setQuery] = useState('');
@@ -113,7 +116,7 @@ export default function FriendsScreen() {
               onChangeText={setQuery}
               onSubmitEditing={() => void search()}
               placeholder="NAME OR EMAIL"
-              placeholderTextColor={COLORS.placeholder}
+              placeholderTextColor={colors.placeholder}
               returnKeyType="search"
               style={styles.searchInput}
               value={query}
@@ -179,6 +182,9 @@ function FriendSection({
   loading?: boolean;
   onAdd?: (friend: FriendProfile) => Promise<void>;
 }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   return (
     <View style={styles.section}>
       <View style={styles.sectionHeading}>
@@ -188,7 +194,7 @@ function FriendSection({
       <View style={styles.friendList}>
         {loading ? (
           <View style={styles.loadingRow}>
-            <ActivityIndicator color={COLORS.tealDark} size="small" />
+            <ActivityIndicator color={colors.tealDark} size="small" />
             <Text style={styles.emptyText}>LOADING FRIENDS...</Text>
           </View>
         ) : friends.length ? (
@@ -216,7 +222,7 @@ function FriendSection({
                   style={({ pressed }) => [styles.addButton, pressed && styles.pressed]}
                 >
                   {addingId === friend.authUserId ? (
-                    <ActivityIndicator color={COLORS.primary} size="small" />
+                    <ActivityIndicator color={colors.primary} size="small" />
                   ) : (
                     <Text style={styles.addButtonText}>＋ ADD</Text>
                   )}
@@ -235,6 +241,9 @@ function FriendSection({
 }
 
 function PaperSpeckles() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   return (
     <View pointerEvents="none" style={styles.speckles}>
       {Array.from({ length: 24 }).map((_, index) => (
@@ -262,132 +271,135 @@ function initials(displayName: string) {
     .join('');
 }
 
-const styles = StyleSheet.create({
-  safeArea: { backgroundColor: '#fbf5ef', flex: 1 },
-  screen: { backgroundColor: '#fbf5ef', flex: 1 },
-  speckles: { ...StyleSheet.absoluteFillObject, overflow: 'hidden' },
-  speck: {
-    backgroundColor: 'rgba(156, 65, 65, 0.16)',
-    height: 1,
-    position: 'absolute',
-    width: 3,
-  },
-  content: { paddingBottom: 128, paddingHorizontal: 18, paddingTop: 28 },
-  title: {
-    color: COLORS.black,
-    fontFamily: FONTS.secondaryBold,
-    fontSize: 36,
-    lineHeight: 42,
-  },
-  subtitle: {
-    color: COLORS.text,
-    fontFamily: FONTS.secondaryLight,
-    fontSize: 15,
-    lineHeight: 21,
-    marginBottom: 22,
-    marginTop: 3,
-  },
-  searchRow: { flexDirection: 'row' },
-  searchInput: {
-    backgroundColor: 'rgba(255,255,255,0.48)',
-    borderColor: COLORS.teal,
-    borderWidth: 1.5,
-    color: COLORS.black,
-    flex: 1,
-    fontFamily: FONTS.primary,
-    fontSize: 11,
-    minHeight: 46,
-    paddingHorizontal: 12,
-  },
-  searchButton: {
-    alignItems: 'center',
-    backgroundColor: COLORS.primary,
-    justifyContent: 'center',
-    marginLeft: 6,
-    minHeight: 46,
-    paddingHorizontal: 16,
-  },
-  searchButtonText: {
-    color: '#fffaf5',
-    fontFamily: FONTS.primaryBold,
-    fontSize: 10,
-    letterSpacing: 0.8,
-  },
-  pressed: { opacity: 0.58 },
-  error: {
-    backgroundColor: 'rgba(156,65,65,0.10)',
-    color: COLORS.primary,
-    fontFamily: FONTS.primary,
-    fontSize: 10,
-    marginTop: 12,
-    padding: 10,
-  },
-  section: { marginTop: 30 },
-  sectionHeading: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 7,
-  },
-  sectionLabel: {
-    color: COLORS.text,
-    fontFamily: FONTS.primaryBold,
-    fontSize: 10,
-    letterSpacing: 1.3,
-  },
-  count: { color: COLORS.primary, fontFamily: FONTS.primaryBold, fontSize: 10 },
-  friendList: {
-    backgroundColor: 'rgba(255,255,255,0.45)',
-    borderColor: COLORS.teal,
-    borderWidth: 1.5,
-    padding: 8,
-  },
-  friendRow: {
-    alignItems: 'center',
-    borderBottomColor: 'rgba(132,165,157,0.25)',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    flexDirection: 'row',
-    minHeight: 58,
-    paddingHorizontal: 7,
-    paddingVertical: 7,
-  },
-  avatar: {
-    alignItems: 'center',
-    backgroundColor: 'rgba(132,165,157,0.18)',
-    borderColor: COLORS.teal,
-    borderRadius: 20,
-    borderWidth: 1,
-    height: 40,
-    justifyContent: 'center',
-    marginRight: 10,
-    width: 40,
-  },
-  initials: { color: COLORS.tealDark, fontFamily: FONTS.primaryBold, fontSize: 10 },
-  friendCopy: { flex: 1 },
-  friendName: { color: COLORS.black, fontFamily: FONTS.secondary, fontSize: 14 },
-  friendEmail: { color: COLORS.muted, fontFamily: FONTS.primary, fontSize: 9, marginTop: 2 },
-  friendMark: { color: COLORS.coral, fontSize: 18, marginLeft: 8 },
-  addButton: {
-    alignItems: 'center',
-    borderColor: COLORS.primary,
-    borderWidth: 1,
-    justifyContent: 'center',
-    marginLeft: 8,
-    minHeight: 34,
-    minWidth: 62,
-    paddingHorizontal: 8,
-  },
-  addButtonText: {
-    color: COLORS.primary,
-    fontFamily: FONTS.primaryBold,
-    fontSize: 9,
-    letterSpacing: 0.5,
-  },
-  emptyText: {
-    color: COLORS.muted,
-    fontFamily: FONTS.primary,
-    fontSize: 10,
-    padding: 12,
-  },
-  loadingRow: { alignItems: 'center', flexDirection: 'row', paddingHorizontal: 12 },
-});
+function createStyles(colors: AppColors) {
+  return StyleSheet.create({
+    safeArea: { backgroundColor: colors.background, flex: 1 },
+    screen: { backgroundColor: colors.background, flex: 1 },
+    speckles: { ...StyleSheet.absoluteFillObject, overflow: 'hidden' },
+    speck: {
+      backgroundColor: colors.coral,
+      opacity: 0.16,
+      height: 1,
+      position: 'absolute',
+      width: 3,
+    },
+    content: { paddingBottom: 128, paddingHorizontal: 18, paddingTop: 28 },
+    title: {
+      color: colors.black,
+      fontFamily: FONTS.secondaryBold,
+      fontSize: 36,
+      lineHeight: 42,
+    },
+    subtitle: {
+      color: colors.text,
+      fontFamily: FONTS.secondaryLight,
+      fontSize: 15,
+      lineHeight: 21,
+      marginBottom: 22,
+      marginTop: 3,
+    },
+    searchRow: { flexDirection: 'row' },
+    searchInput: {
+      backgroundColor: colors.surface,
+      borderColor: colors.teal,
+      borderWidth: 1.5,
+      color: colors.black,
+      flex: 1,
+      fontFamily: FONTS.primary,
+      fontSize: 11,
+      minHeight: 46,
+      paddingHorizontal: 12,
+    },
+    searchButton: {
+      alignItems: 'center',
+      backgroundColor: colors.primary,
+      justifyContent: 'center',
+      marginLeft: 6,
+      minHeight: 46,
+      paddingHorizontal: 16,
+    },
+    searchButtonText: {
+      color: '#fffaf5',
+      fontFamily: FONTS.primaryBold,
+      fontSize: 10,
+      letterSpacing: 0.8,
+    },
+    pressed: { opacity: 0.58 },
+    error: {
+      backgroundColor: 'rgba(156,65,65,0.10)',
+      color: colors.primary,
+      fontFamily: FONTS.primary,
+      fontSize: 10,
+      marginTop: 12,
+      padding: 10,
+    },
+    section: { marginTop: 30 },
+    sectionHeading: {
+      alignItems: 'center',
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginBottom: 7,
+    },
+    sectionLabel: {
+      color: colors.text,
+      fontFamily: FONTS.primaryBold,
+      fontSize: 10,
+      letterSpacing: 1.3,
+    },
+    count: { color: colors.primary, fontFamily: FONTS.primaryBold, fontSize: 10 },
+    friendList: {
+      backgroundColor: colors.surface,
+      borderColor: colors.teal,
+      borderWidth: 1.5,
+      padding: 8,
+    },
+    friendRow: {
+      alignItems: 'center',
+      borderBottomColor: 'rgba(132,165,157,0.25)',
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      flexDirection: 'row',
+      minHeight: 58,
+      paddingHorizontal: 7,
+      paddingVertical: 7,
+    },
+    avatar: {
+      alignItems: 'center',
+      backgroundColor: 'rgba(132,165,157,0.18)',
+      borderColor: colors.teal,
+      borderRadius: 20,
+      borderWidth: 1,
+      height: 40,
+      justifyContent: 'center',
+      marginRight: 10,
+      width: 40,
+    },
+    initials: { color: colors.tealDark, fontFamily: FONTS.primaryBold, fontSize: 10 },
+    friendCopy: { flex: 1 },
+    friendName: { color: colors.black, fontFamily: FONTS.secondary, fontSize: 14 },
+    friendEmail: { color: colors.muted, fontFamily: FONTS.primary, fontSize: 9, marginTop: 2 },
+    friendMark: { color: colors.coral, fontSize: 18, marginLeft: 8 },
+    addButton: {
+      alignItems: 'center',
+      borderColor: colors.primary,
+      borderWidth: 1,
+      justifyContent: 'center',
+      marginLeft: 8,
+      minHeight: 34,
+      minWidth: 62,
+      paddingHorizontal: 8,
+    },
+    addButtonText: {
+      color: colors.primary,
+      fontFamily: FONTS.primaryBold,
+      fontSize: 9,
+      letterSpacing: 0.5,
+    },
+    emptyText: {
+      color: colors.muted,
+      fontFamily: FONTS.primary,
+      fontSize: 10,
+      padding: 12,
+    },
+    loadingRow: { alignItems: 'center', flexDirection: 'row', paddingHorizontal: 12 },
+  });
+}

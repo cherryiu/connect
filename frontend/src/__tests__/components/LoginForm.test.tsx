@@ -3,6 +3,12 @@ import { render, waitFor } from '@testing-library/react-native';
 import { expect, jest, test } from '@jest/globals';
 
 import LoginForm from '../../components/forms/LoginForm';
+import { ThemeProvider } from '../../context/ThemeContext';
+
+jest.mock('expo-glass-effect', () => ({
+  GlassContainer: 'GlassContainer',
+  GlassView: 'GlassView',
+}));
 
 // mock auth so test doesnt have to use real auth status
 jest.mock('../../hooks/useAuth', () => ({
@@ -17,6 +23,10 @@ jest.mock('../../hooks/useAuth', () => ({
 }));
 
 test('renders without crashing', async () => {
-  const { getByTestId } = render(<LoginForm />);
+  const { getByTestId } = render(
+    <ThemeProvider>
+      <LoginForm />
+    </ThemeProvider>,
+  );
   await waitFor(() => expect(getByTestId('login-form')).toBeTruthy());
 });

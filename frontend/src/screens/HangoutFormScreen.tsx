@@ -17,8 +17,9 @@ import { Formik } from 'formik';
 import * as yup from 'yup';
 
 import { createHangout, Hangout, HangoutRequest, updateHangout } from '../api/hangoutsApi';
-import { COLORS, FONTS } from '../constants';
+import { FONTS } from '../constants';
 import { useAuth } from '../context/AuthContext';
+import { type AppColors, useTheme } from '../context/ThemeContext';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import FormTextInput from '../components/forms/FormTextInput';
 import FriendSelector from '../components/forms/FriendSelector';
@@ -63,6 +64,8 @@ export default function HangoutFormScreen() {
   const route = useRoute<HangoutFormRoute>();
   const existing = route.params?.hangout;
   const { user } = useAuth();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const initial = useMemo(() => getInitialValues(existing), [existing]);
   const [friends, setFriends] = useState<FriendProfile[]>([]);
   const [friendsLoading, setFriendsLoading] = useState(true);
@@ -255,7 +258,7 @@ export default function HangoutFormScreen() {
                 <Switch
                   onValueChange={(value) => void setFieldValue('isOpen', value)}
                   thumbColor="#fffaf5"
-                  trackColor={{ false: '#cfc6bd', true: COLORS.teal }}
+                  trackColor={{ false: colors.mutedBorder, true: colors.teal }}
                   value={values.isOpen}
                 />
               </View>
@@ -343,72 +346,74 @@ function isString(value: string | null | undefined): value is string {
 const MONO = FONTS.primary;
 const SECONDARY = FONTS.secondary;
 
-const styles = StyleSheet.create({
-  safeArea: { backgroundColor: '#fbf5ef', flex: 1 },
-  screen: { backgroundColor: '#fbf5ef', flex: 1 },
-  header: {
-    alignItems: 'center',
-    borderBottomColor: COLORS.teal,
-    borderBottomWidth: 1,
-    flexDirection: 'row',
-    height: 66,
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-  },
-  back: { color: COLORS.primary, fontSize: 38, lineHeight: 40 },
-  headerTitle: { color: COLORS.primary, fontFamily: MONO, fontSize: 16, fontWeight: '700' },
-  headerSpacer: { width: 22 },
-  content: { padding: 22, paddingBottom: 60 },
-  kicker: { color: COLORS.coral, fontFamily: MONO, fontSize: 15, fontWeight: '700' },
-  title: {
-    color: COLORS.black,
-    fontFamily: SECONDARY,
-    fontSize: 28,
-    marginBottom: 28,
-    marginTop: 8,
-  },
-  fieldLabel: {
-    color: COLORS.text,
-    fontFamily: MONO,
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 1.3,
-    marginBottom: 7,
-  },
-  row: { flexDirection: 'row' },
-  dateField: { flex: 1.6, marginRight: 8 },
-  timeField: { flex: 1, marginRight: 8 },
-  openRow: {
-    alignItems: 'center',
-    borderColor: COLORS.teal,
-    borderWidth: 1.5,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 18,
-    padding: 14,
-  },
-  openCopy: { flex: 1 },
-  helpText: { color: COLORS.text, fontFamily: MONO, fontSize: 10 },
-  error: {
-    backgroundColor: 'rgba(156,65,65,0.10)',
-    color: COLORS.primary,
-    fontFamily: MONO,
-    fontSize: 11,
-    marginBottom: 14,
-    padding: 12,
-  },
-  saveButton: {
-    alignItems: 'center',
-    backgroundColor: COLORS.primary,
-    justifyContent: 'center',
-    minHeight: 50,
-    borderWidth: 1,
-  },
-  saveButtonText: {
-    color: '#fff',
-    fontFamily: MONO,
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 1.3,
-  },
-});
+function createStyles(colors: AppColors) {
+  return StyleSheet.create({
+    safeArea: { backgroundColor: colors.background, flex: 1 },
+    screen: { backgroundColor: colors.background, flex: 1 },
+    header: {
+      alignItems: 'center',
+      borderBottomColor: colors.teal,
+      borderBottomWidth: 1,
+      flexDirection: 'row',
+      height: 66,
+      justifyContent: 'space-between',
+      paddingHorizontal: 20,
+    },
+    back: { color: colors.primary, fontSize: 38, lineHeight: 40 },
+    headerTitle: { color: colors.primary, fontFamily: MONO, fontSize: 16, fontWeight: '700' },
+    headerSpacer: { width: 22 },
+    content: { padding: 22, paddingBottom: 60 },
+    kicker: { color: colors.coral, fontFamily: MONO, fontSize: 15, fontWeight: '700' },
+    title: {
+      color: colors.black,
+      fontFamily: SECONDARY,
+      fontSize: 28,
+      marginBottom: 28,
+      marginTop: 8,
+    },
+    fieldLabel: {
+      color: colors.text,
+      fontFamily: MONO,
+      fontSize: 10,
+      fontWeight: '700',
+      letterSpacing: 1.3,
+      marginBottom: 7,
+    },
+    row: { flexDirection: 'row' },
+    dateField: { flex: 1.6, marginRight: 8 },
+    timeField: { flex: 1, marginRight: 8 },
+    openRow: {
+      alignItems: 'center',
+      borderColor: colors.teal,
+      borderWidth: 1.5,
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginBottom: 18,
+      padding: 14,
+    },
+    openCopy: { flex: 1 },
+    helpText: { color: colors.text, fontFamily: MONO, fontSize: 10 },
+    error: {
+      backgroundColor: 'rgba(156,65,65,0.10)',
+      color: colors.primary,
+      fontFamily: MONO,
+      fontSize: 11,
+      marginBottom: 14,
+      padding: 12,
+    },
+    saveButton: {
+      alignItems: 'center',
+      backgroundColor: colors.primary,
+      justifyContent: 'center',
+      minHeight: 50,
+      borderWidth: 1,
+    },
+    saveButtonText: {
+      color: '#fff',
+      fontFamily: MONO,
+      fontSize: 12,
+      fontWeight: '700',
+      letterSpacing: 1.3,
+    },
+  });
+}

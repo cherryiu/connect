@@ -45,6 +45,10 @@ public class LocationVisitRepository implements PanacheMongoRepository<LocationV
         return find("authUserId", userId).list();
     }
 
+    public List<LocationVisit> findByUserAtLocation(ObjectId userId, String locationKey) {
+        return find("authUserId = ?1 and locationKey = ?2", userId, locationKey).list();
+    }
+
     public List<LocationVisit> findFriendsAtLocation(
             String locationKey,
             Collection<ObjectId> friendIds

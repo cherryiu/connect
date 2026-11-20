@@ -3,9 +3,17 @@ import { describe, expect, test } from '@jest/globals';
 import { createHangout, deleteHangout, getHangoutsForUser, joinHangout } from '../api/hangoutsApi';
 import { getAuthStatus, submitAuthCredentials } from '../api/authApi';
 import {
+  confirmLocationVisitAttendance,
+  createStandaloneLocationOrder,
+  deleteLocationVisit,
+  deleteStandaloneLocationOrder,
   getFriendLocationVisits,
+  getLocationVisitHistory,
+  getPendingLocationVisits,
   getUserLocationVisits,
   syncLocationVisits,
+  updateLocationVisitJournal,
+  updateStandaloneLocationOrder,
 } from '../api/locationApi';
 import { addFriend, getFriends, searchUsers } from '../api/usersApi';
 
@@ -53,10 +61,82 @@ describe('in-memory API', () => {
     await expect(getUserLocationVisits('mock-user-1')).resolves.toContainEqual(
       expect.objectContaining({ location: 'Mock Theater', visitCount: 1 }),
     );
+    await expect(getLocationVisitHistory('mock-user-1', 'Local Good Coffee Co.')).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          orderDescription: 'Iced oat latte + blueberry scone',
+          orderRating: 4,
+        }),
+      ]),
+    );
+    await expect(getPendingLocationVisits('mock-user-1')).resolves.toContainEqual(
+      expect.objectContaining({ authHangoutId: created.authHangoutId, location: 'Mock Theater' }),
+    );
+    await expect(
+      updateLocationVisitJournal('mock-user-1', created.authHangoutId, {
+        notes: 'Great seats.',
+        orderDescription: 'Popcorn',
+        orderRating: 5,
+      }),
+    ).resolves.toMatchObject({
+      notes: 'Great seats.',
+      orderDescription: 'Popcorn',
+      orderRating: 5,
+    });
+    await confirmLocationVisitAttendance('mock-user-1', created.authHangoutId, true);
+    await expect(getPendingLocationVisits('mock-user-1')).resolves.not.toContainEqual(
+      expect.objectContaining({ authHangoutId: created.authHangoutId }),
+    );
+    const declinedVisit = (await getPendingLocationVisits('mock-user-1')).find(
+      (visit) => visit.location === 'Local Good Coffee Co.',
+    );
+    expect(declinedVisit).toBeDefined();
+    await confirmLocationVisitAttendance('mock-user-1', declinedVisit!.authHangoutId, false);
+    await syncLocationVisits();
+    await expect(getPendingLocationVisits('mock-user-1')).resolves.not.toContainEqual(
+      expect.objectContaining({ authHangoutId: declinedVisit!.authHangoutId }),
+    );
+    await expect(
+      getLocationVisitHistory('mock-user-1', 'Local Good Coffee Co.'),
+    ).resolves.not.toContainEqual(
+      expect.objectContaining({ authHangoutId: declinedVisit!.authHangoutId }),
+    );
+    const standaloneOrder = await createStandaloneLocationOrder('mock-user-1', {
+      location: 'Local Good Coffee Co.',
+      notes: 'Quick takeout order.',
+      orderDescription: 'Matcha latte',
+      orderRating: 4,
+    });
+    expect(standaloneOrder).toMatchObject({
+      orderDescription: 'Matcha latte',
+      standaloneOrder: true,
+    });
+    await expect(
+      updateStandaloneLocationOrder('mock-user-1', standaloneOrder.entryId, {
+        notes: 'Get it with less sugar.',
+        orderDescription: 'Iced matcha latte',
+        orderRating: 5,
+      }),
+    ).resolves.toMatchObject({ orderDescription: 'Iced matcha latte', orderRating: 5 });
+    await expect(
+      getLocationVisitHistory('mock-user-1', 'Local Good Coffee Co.'),
+    ).resolves.toContainEqual(
+      expect.objectContaining({ entryId: standaloneOrder.entryId, standaloneOrder: true }),
+    );
+    await deleteStandaloneLocationOrder('mock-user-1', standaloneOrder.entryId);
+    await expect(
+      getLocationVisitHistory('mock-user-1', 'Local Good Coffee Co.'),
+    ).resolves.not.toContainEqual(expect.objectContaining({ entryId: standaloneOrder.entryId }));
     await expect(
       getFriendLocationVisits('Mock Theater', [friends[0].authUserId]),
     ).resolves.toContainEqual(
       expect.objectContaining({ authUserId: friends[0].authUserId, visitCount: 1 }),
+    );
+
+    await deleteLocationVisit('mock-user-1', created.authHangoutId);
+    await syncLocationVisits();
+    await expect(getUserLocationVisits('mock-user-1')).resolves.not.toContainEqual(
+      expect.objectContaining({ location: 'Mock Theater' }),
     );
 
     await deleteHangout(created.authHangoutId);

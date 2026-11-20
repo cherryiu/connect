@@ -16,6 +16,7 @@ public class HangoutRecord extends PanacheMongoEntity {
 
     public ObjectId authHangoutId;
     public ArrayList<ObjectId> participantAuthUserIds = new ArrayList<>();
+    public String hangoutName;
     public String location;
     public Date endTime;
 }

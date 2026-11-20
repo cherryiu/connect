@@ -10,6 +10,7 @@ import { COLORS } from '../constants';
 import gradientBackground from '../../assets/gradient-background-login.jpg';
 import { APP_ENV } from '@env';
 import { useAuth } from '../context/AuthContext';
+import { ThemeProvider } from '../context/ThemeContext';
 
 type LoginNavigation = NativeStackNavigationProp<RootStackParamList, 'Login'>;
 
@@ -33,41 +34,46 @@ export default function LoginScreen() {
   };
 
   return (
-    <ImageBackground
-      resizeMode="cover"
-      source={gradientBackground}
-      style={styles.background}
-      testID="login-screen"
-    >
-      <SafeAreaView style={styles.safeArea}>
-        {mode === 'login' ? (
-          <LoginForm
-            initialEmail={registeredEmail}
-            onCreateAccount={() => {
-              setRegisteredEmail('');
-              setMode('create');
-            }}
-            successMessage={registeredEmail ? 'Account created. You can log in now.' : undefined}
-          />
-        ) : (
-          <CreateNewUserForm
-            onBackToLogin={() => setMode('login')}
-            onCreated={(email) => {
-              setRegisteredEmail(email);
-              setMode('login');
-            }}
-          />
-        )}
+    // Authentication keeps its original light palette until it has a dedicated
+    // dark design. The nested provider prevents the signed-in theme from leaking
+    // into the login and account-creation forms after logout.
+    <ThemeProvider>
+      <ImageBackground
+        resizeMode="cover"
+        source={gradientBackground}
+        style={styles.background}
+        testID="login-screen"
+      >
+        <SafeAreaView style={styles.safeArea}>
+          {mode === 'login' ? (
+            <LoginForm
+              initialEmail={registeredEmail}
+              onCreateAccount={() => {
+                setRegisteredEmail('');
+                setMode('create');
+              }}
+              successMessage={registeredEmail ? 'Account created. You can log in now.' : undefined}
+            />
+          ) : (
+            <CreateNewUserForm
+              onBackToLogin={() => setMode('login')}
+              onCreated={(email) => {
+                setRegisteredEmail(email);
+                setMode('login');
+              }}
+            />
+          )}
 
-        {/* for testing purposes */}
-        <Pressable
-          onPress={() => void openDevCalendar()}
-          style={{ padding: 12, backgroundColor: COLORS.primary, margin: 12, borderRadius: 6 }}
-        >
-          <Text style={{ color: 'white', textAlign: 'center' }}>Go to Scrapbook Screen</Text>
-        </Pressable>
-      </SafeAreaView>
-    </ImageBackground>
+          {/* for testing purposes */}
+          <Pressable
+            onPress={() => void openDevCalendar()}
+            style={{ padding: 12, backgroundColor: COLORS.primary, margin: 12, borderRadius: 6 }}
+          >
+            <Text style={{ color: 'white', textAlign: 'center' }}>Go to Scrapbook Screen</Text>
+          </Pressable>
+        </SafeAreaView>
+      </ImageBackground>
+    </ThemeProvider>
   );
 }
 

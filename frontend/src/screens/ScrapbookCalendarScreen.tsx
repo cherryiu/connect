@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Linking,
   Modal,
   Pressable,
@@ -9,6 +10,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -18,20 +20,19 @@ import { BlurView } from 'expo-blur';
 import { GlassView } from 'expo-glass-effect';
 import { LinearGradient } from 'expo-linear-gradient';
 
+import { deleteHangout, getHangoutsForUser, Hangout, joinHangout } from '../api/hangoutsApi';
 import {
-  deleteHangout,
-  getHangoutsForUser,
-  Hangout,
-  joinHangout,
-} from '../api/hangoutsApi';
-import {
+  confirmLocationVisitAttendance,
   getFriendLocationVisits,
+  getPendingLocationVisits,
   syncLocationVisits,
   type FriendLocationVisit,
+  type PendingLocationVisit,
 } from '../api/locationApi';
 import { getFriends, type FriendProfile } from '../api/usersApi';
-import { COLORS, FONTS } from '../constants';
+import { FONTS } from '../constants';
 import { useAuth } from '../context/AuthContext';
+import { type AppColors, useTheme } from '../context/ThemeContext';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 import formatCalendarMonth from '../utils/formatCalendarMonth';
 
@@ -50,17 +51,28 @@ type CalendarCell = {
   inMonth: boolean;
 };
 
+type HangoutDateFilter = {
+  date: Date;
+  mode: 'day' | 'month';
+};
+
 const WEEKDAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 
 export default function ScrapbookCalendarScreen() {
   const navigation = useNavigation<CalendarNavigation>();
   const { isLoading: authLoading, isLoggedIn, logout, user } = useAuth();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [visibleMonth, setVisibleMonth] = useState(() => startOfMonth(new Date()));
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [hangouts, setHangouts] = useState<Hangout[]>([]);
   const [friends, setFriends] = useState<FriendProfile[]>([]);
+  const [pendingVisits, setPendingVisits] = useState<PendingLocationVisit[]>([]);
+  const [pendingActionId, setPendingActionId] = useState<string>();
   const [selectedHangout, setSelectedHangout] = useState<Hangout | null>(null);
   const [showAll, setShowAll] = useState(false);
+  const [hangoutSearch, setHangoutSearch] = useState('');
+  const [hangoutDateFilter, setHangoutDateFilter] = useState<HangoutDateFilter | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -76,20 +88,23 @@ export default function ScrapbookCalendarScreen() {
       setRefreshing(false);
       return;
     }
+    const authUserId = user.authUserId;
 
     try {
       setError(null);
-      const [hangoutResult, friendResult] = await Promise.allSettled([
-        getHangoutsForUser(user.authUserId),
+      const pendingVisitRequest = syncLocationVisits()
+        .catch(() => undefined)
+        .then(() => getPendingLocationVisits(authUserId));
+      const [hangoutResult, friendResult, pendingVisitResult] = await Promise.allSettled([
+        getHangoutsForUser(authUserId),
         getFriends(),
+        pendingVisitRequest,
       ]);
       if (hangoutResult.status === 'rejected') throw hangoutResult.reason;
       const result = hangoutResult.value;
       setHangouts(result.sort((a, b) => Date.parse(a.startTime) - Date.parse(b.startTime)));
       if (friendResult.status === 'fulfilled') setFriends(friendResult.value);
-      // The scheduled backend sync handles this automatically. Triggering it
-      // here makes a just-completed hangout visible without waiting a minute.
-      void syncLocationVisits().catch(() => undefined);
+      if (pendingVisitResult.status === 'fulfilled') setPendingVisits(pendingVisitResult.value);
     } catch {
       setError('Hangouts could not be refreshed. Pull down to try again.');
     } finally {
@@ -112,13 +127,41 @@ export default function ScrapbookCalendarScreen() {
     }, {});
   }, [hangouts]);
 
-  const upcomingHangouts = useMemo(() => {
+  const displayedHangouts = useMemo(() => {
     const now = new Date();
     const future = hangouts.filter((hangout) => new Date(hangout.endTime) >= now);
-    return showAll
-      ? [...hangouts].sort((left, right) => Date.parse(right.startTime) - Date.parse(left.startTime))
-      : future.slice(0, 3);
-  }, [hangouts, showAll]);
+    if (!showAll) return future.slice(0, 3);
+
+    return hangouts
+      .filter((hangout) => matchesHangoutFilters(hangout, hangoutSearch, hangoutDateFilter))
+      .sort((left, right) => Date.parse(right.startTime) - Date.parse(left.startTime));
+  }, [hangoutDateFilter, hangoutSearch, hangouts, showAll]);
+
+  const filtersActive = hangoutSearch.trim().length > 0 || hangoutDateFilter !== null;
+
+  const toggleShowAll = () => {
+    if (showAll) {
+      setHangoutSearch('');
+      setHangoutDateFilter(null);
+    }
+    setShowAll((current) => !current);
+  };
+
+  const clearHangoutFilters = () => {
+    setHangoutSearch('');
+    setHangoutDateFilter(null);
+  };
+
+  const toggleDateFilter = (mode: HangoutDateFilter['mode']) => {
+    setHangoutDateFilter((current) => {
+      const matchesSelection =
+        current?.mode === mode &&
+        (mode === 'day'
+          ? sameDay(current.date, selectedDate)
+          : sameMonth(current.date, selectedDate));
+      return matchesSelection ? null : { date: selectedDate, mode };
+    });
+  };
 
   const openHangoutForm = (hangout?: Hangout) => {
     navigation.navigate('HangoutForm', hangout ? { hangout } : undefined);
@@ -126,7 +169,9 @@ export default function ScrapbookCalendarScreen() {
 
   const removeHangout = async (hangout: Hangout) => {
     await deleteHangout(hangout.authHangoutId);
-    setHangouts((current) => current.filter((item) => item.authHangoutId !== hangout.authHangoutId));
+    setHangouts((current) =>
+      current.filter((item) => item.authHangoutId !== hangout.authHangoutId),
+    );
     setSelectedHangout(null);
   };
 
@@ -141,8 +186,37 @@ export default function ScrapbookCalendarScreen() {
 
   const selectDay = (date: Date) => {
     setSelectedDate(date);
+    if (showAll) return;
     const dayHangouts = hangoutsByDay[dateKey(date)];
     if (dayHangouts?.length) setSelectedHangout(dayHangouts[0]);
+  };
+
+  const openVisitEditor = (visit: PendingLocationVisit) => {
+    navigation.navigate('PlaceHistoryScreen', {
+      editHangoutId: visit.authHangoutId,
+      place: {
+        lastVisitedAt: visit.visitedAt,
+        location: visit.location,
+        visitCount: 1,
+      },
+    });
+  };
+
+  const confirmAttendance = async (visit: PendingLocationVisit, attended: boolean) => {
+    if (!user?.authUserId) return;
+    try {
+      setError(null);
+      setPendingActionId(visit.authHangoutId);
+      await confirmLocationVisitAttendance(user.authUserId, visit.authHangoutId, attended);
+      setPendingVisits((current) =>
+        current.filter((pending) => pending.authHangoutId !== visit.authHangoutId),
+      );
+      if (attended) openVisitEditor(visit);
+    } catch {
+      setError('Attendance could not be saved. Please try again.');
+    } finally {
+      setPendingActionId(undefined);
+    }
   };
 
   return (
@@ -153,10 +227,11 @@ export default function ScrapbookCalendarScreen() {
 
         <ScrollView
           contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
-              tintColor={COLORS.primary}
+              tintColor={colors.primary}
               onRefresh={() => {
                 setRefreshing(true);
                 void loadHangouts();
@@ -178,11 +253,29 @@ export default function ScrapbookCalendarScreen() {
             selectedDate={selectedDate}
           />
 
+          {pendingVisits.length ? (
+            <View style={styles.visitPromptList}>
+              {pendingVisits.map((visit) => (
+                <VisitConfirmationPrompt
+                  key={visit.authHangoutId}
+                  loading={pendingActionId === visit.authHangoutId}
+                  onConfirm={(attended) => void confirmAttendance(visit, attended)}
+                  onOpen={() => openVisitEditor(visit)}
+                  visit={visit}
+                />
+              ))}
+            </View>
+          ) : null}
+
           <View style={styles.switchRow}>
             <Pressable
               accessibilityRole="button"
-              onPress={() => setShowAll((value) => !value)}
-              style={[styles.switchButton, showAll && styles.switchButtonActive]}
+              onPress={toggleShowAll}
+              style={({ pressed }) => [
+                styles.switchButton,
+                showAll && styles.switchButtonActive,
+                pressed && styles.switchButtonPressed,
+              ]}
             >
               <Text style={[styles.switchButtonText, showAll && styles.switchButtonTextActive]}>
                 {showAll ? 'SHOW UPCOMING' : 'SEE ALL HANGS'}
@@ -192,26 +285,108 @@ export default function ScrapbookCalendarScreen() {
             <Pressable
               accessibilityRole="button"
               onPress={() => openHangoutForm()}
-              style={styles.switchButton}
+              style={({ pressed }) => [
+                styles.switchButton,
+                styles.createHangButton,
+                pressed && styles.switchButtonPressed,
+              ]}
             >
-              <Text style={styles.switchButtonText}>NEW HANG</Text>
+              <Text style={[styles.switchButtonText, styles.createHangButtonText]}>
+                CREATE NEW HANG
+              </Text>
             </Pressable>
           </View>
 
           <Text style={styles.sectionTitle}>
-            <Text style={styles.sparkle}>✧ </Text>coming up...
+            <Text style={styles.sparkle}>✧ </Text>
+            {showAll ? 'all hangs...' : 'coming up...'}
           </Text>
+
+          {showAll ? (
+            <View style={styles.filterPanel}>
+              <TextInput
+                accessibilityLabel="Search hangouts by name or location"
+                autoCapitalize="none"
+                autoCorrect={false}
+                onChangeText={setHangoutSearch}
+                placeholder="SEARCH NAME OR LOCATION"
+                placeholderTextColor={colors.placeholder}
+                returnKeyType="search"
+                style={styles.hangoutSearchInput}
+                value={hangoutSearch}
+              />
+
+              <View style={styles.filterActionRow}>
+                <Pressable
+                  accessibilityHint="Uses the day selected in the calendar above"
+                  accessibilityRole="button"
+                  onPress={() => toggleDateFilter('day')}
+                  style={({ pressed }) => [
+                    styles.dateFilterButton,
+                    hangoutDateFilter?.mode === 'day' && styles.dateFilterButtonActive,
+                    pressed && styles.switchButtonPressed,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.dateFilterButtonText,
+                      hangoutDateFilter?.mode === 'day' && styles.dateFilterButtonTextActive,
+                    ]}
+                  >
+                    DAY: {formatFilterDate(selectedDate)}
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  accessibilityHint="Uses the month selected in the calendar above"
+                  accessibilityRole="button"
+                  onPress={() => toggleDateFilter('month')}
+                  style={({ pressed }) => [
+                    styles.dateFilterButton,
+                    hangoutDateFilter?.mode === 'month' && styles.dateFilterButtonActive,
+                    pressed && styles.switchButtonPressed,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.dateFilterButtonText,
+                      hangoutDateFilter?.mode === 'month' && styles.dateFilterButtonTextActive,
+                    ]}
+                  >
+                    MONTH: {formatFilterMonth(selectedDate)}
+                  </Text>
+                </Pressable>
+
+                {filtersActive ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={clearHangoutFilters}
+                    style={({ pressed }) => [
+                      styles.clearFiltersButton,
+                      pressed && styles.switchButtonPressed,
+                    ]}
+                  >
+                    <Text style={styles.clearFiltersButtonText}>CLEAR</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+
+              <Text style={styles.dateFilterHint}>
+                Select a calendar day above, then filter by that day or its month.
+              </Text>
+            </View>
+          ) : null}
 
           {error ? <Text style={styles.errorBanner}>{error}</Text> : null}
 
           {loading ? (
             <View style={styles.loadingCard}>
-              <ActivityIndicator color={COLORS.primary} />
+              <ActivityIndicator color={colors.primary} />
               <Text style={styles.loadingText}>CHECKING THE CALENDAR...</Text>
             </View>
-          ) : upcomingHangouts.length ? (
+          ) : displayedHangouts.length ? (
             <View style={styles.cardList}>
-              {upcomingHangouts.map((hangout) => (
+              {displayedHangouts.map((hangout) => (
                 <HangoutCard
                   hangout={hangout}
                   key={hangout.id}
@@ -220,7 +395,10 @@ export default function ScrapbookCalendarScreen() {
               ))}
             </View>
           ) : (
-            <EmptyHangouts onCreate={() => openHangoutForm()} />
+            <EmptyHangouts
+              onClearFilters={filtersActive ? clearHangoutFilters : undefined}
+              onCreate={() => openHangoutForm()}
+            />
           )}
         </ScrollView>
 
@@ -246,11 +424,80 @@ export default function ScrapbookCalendarScreen() {
 
       {/* <Pressable
         onPress={() => navigation.navigate('Login')}
-        style={{ padding: 12, backgroundColor: COLORS.primary, margin: 12, borderRadius: 6 }}
+        style={{ padding: 12, backgroundColor: colors.primary, margin: 12, borderRadius: 6 }}
       >
         <Text style={{ color: 'white', textAlign: 'center' }}>Go to Login Screen</Text>
       </Pressable> */}
     </SafeAreaView>
+  );
+}
+
+function VisitConfirmationPrompt({
+  loading,
+  onConfirm,
+  onOpen,
+  visit,
+}: {
+  loading: boolean;
+  onConfirm: (attended: boolean) => void;
+  onOpen: () => void;
+  visit: PendingLocationVisit;
+}) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const attendanceConfirmed = visit.attendanceConfirmed === true;
+
+  return (
+    <View style={styles.visitPrompt}>
+      <Pressable
+        accessibilityHint="Opens this visit so you can add your order, rating, and notes"
+        accessibilityRole="button"
+        onPress={onOpen}
+        style={({ pressed }) => [styles.visitPromptCopy, pressed && styles.promptPressed]}
+      >
+        <Text style={styles.visitPromptKicker}>
+          {attendanceConfirmed ? 'ADD YOUR ORDER' : 'DID YOU MAKE IT?'}
+        </Text>
+        <Text numberOfLines={1} style={styles.visitPromptTitle}>
+          {visit.hangoutName || visit.location}
+        </Text>
+        <Text style={styles.visitPromptMessage}>
+          {attendanceConfirmed
+            ? 'Your visit is confirmed. Finish your log.'
+            : 'Confirm attendance and add what you ordered.'}
+        </Text>
+      </Pressable>
+      <View style={styles.visitPromptActions}>
+        {attendanceConfirmed ? (
+          <Text style={styles.visitPromptArrow}>→</Text>
+        ) : loading ? (
+          <ActivityIndicator color={colors.primary} size="small" />
+        ) : (
+          <>
+            <Pressable
+              accessibilityLabel="I did not attend"
+              accessibilityRole="button"
+              onPress={() => onConfirm(false)}
+              style={({ pressed }) => [styles.attendanceButton, pressed && styles.promptPressed]}
+            >
+              <Text style={styles.declineText}>×</Text>
+            </Pressable>
+            <Pressable
+              accessibilityLabel="I attended"
+              accessibilityRole="button"
+              onPress={() => onConfirm(true)}
+              style={({ pressed }) => [
+                styles.attendanceButton,
+                styles.confirmButton,
+                pressed && styles.promptPressed,
+              ]}
+            >
+              <Text style={styles.confirmText}>✓</Text>
+            </Pressable>
+          </>
+        )}
+      </View>
+    </View>
   );
 }
 
@@ -263,6 +510,9 @@ function MonthHeader({
   onPrevious: () => void;
   onNext: () => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   return (
     <View style={styles.monthHeader}>
       <Pressable
@@ -299,6 +549,8 @@ function CalendarGrid({
   onSelectDay: (date: Date) => void;
   selectedDate: Date;
 }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const cells = useMemo(() => buildCalendar(month), [month]);
   const today = new Date();
 
@@ -358,18 +610,39 @@ function CalendarGrid({
   );
 }
 
-function EmptyHangouts({ onCreate }: { onCreate: () => void }) {
+function EmptyHangouts({
+  onClearFilters,
+  onCreate,
+}: {
+  onClearFilters?: () => void;
+  onCreate: () => void;
+}) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   return (
     <LinearGradient
-      colors={['#FFF8F3', '#C7EAE1']}
+      colors={[colors.surface, colors.background]}
       // intensity={35}
       // tint="light"
       style={styles.emptyCard}
     >
-      <Text style={styles.emptyTitle}>NOTHING PLANNED</Text>
-      <Pressable accessibilityRole="button" onPress={onCreate} style={styles.createEmptyButton}>
-        <Text style={styles.createEmptyText}>＋ CREATE A HANG</Text>
-      </Pressable>
+      <Text style={styles.emptyTitle}>
+        {onClearFilters ? 'NO MATCHING HANGS' : 'NOTHING PLANNED'}
+      </Text>
+      {onClearFilters ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={onClearFilters}
+          style={styles.createEmptyButton}
+        >
+          <Text style={styles.createEmptyText}>CLEAR FILTERS</Text>
+        </Pressable>
+      ) : (
+        <Pressable accessibilityRole="button" onPress={onCreate} style={styles.createEmptyButton}>
+          <Text style={styles.createEmptyText}>＋ CREATE A HANG</Text>
+        </Pressable>
+      )}
     </LinearGradient>
   );
 }
@@ -391,14 +664,18 @@ function HangoutDetailsModal({
   onEdit: (hangout: Hangout) => void;
   onJoin: (hangout: Hangout) => Promise<void>;
 }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [actionError, setActionError] = useState<string>();
   const [actionPending, setActionPending] = useState(false);
   const [friendVisits, setFriendVisits] = useState<FriendLocationVisit[]>([]);
   const [friendVisitsLoading, setFriendVisitsLoading] = useState(false);
+  const [friendVisitsExpanded, setFriendVisitsExpanded] = useState(false);
 
   useEffect(() => {
     let active = true;
     setFriendVisits([]);
+    setFriendVisitsExpanded(false);
     if (!hangout?.location.trim() || friends.length === 0) return () => undefined;
 
     const loadFriendVisits = async () => {
@@ -449,8 +726,7 @@ function HangoutDetailsModal({
       {
         style: 'destructive',
         text: 'Delete',
-        onPress: () =>
-          void runAction(() => onDelete(hangout), 'The hangout could not be deleted.'),
+        onPress: () => void runAction(() => onDelete(hangout), 'The hangout could not be deleted.'),
       },
     ]);
   };
@@ -496,7 +772,12 @@ function HangoutDetailsModal({
             <View style={styles.participantGrid}>
               {hangout.participantAuthUserIds.slice(0, 6).map((participantId, index) => (
                 <View key={participantId} style={styles.participant}>
-                  <View style={[styles.participantAvatar, { backgroundColor: avatarColor(index) }]}>
+                  <View
+                    style={[
+                      styles.participantAvatar,
+                      { backgroundColor: avatarColor(index, colors) },
+                    ]}
+                  >
                     <Text style={styles.participantAvatarText}>{index + 1}</Text>
                   </View>
                   <Text numberOfLines={1} style={styles.participantName}>
@@ -514,22 +795,86 @@ function HangoutDetailsModal({
             {friendVisitsLoading ? (
               <Text style={styles.locationHistoryLoading}>CHECKING FRIEND HISTORY...</Text>
             ) : friendVisits.length ? (
-              <View style={styles.locationHistory}>
-                <Text style={styles.locationHistoryTitle}>✧ FRIENDS WHO HAVE BEEN HERE</Text>
-                {friendVisits.map((visit) => {
-                  const friend = friends.find(
-                    (candidate) => candidate.authUserId === visit.authUserId,
-                  );
-                  return (
-                    <Text key={visit.authUserId} style={styles.locationHistoryText}>
-                      {friend?.displayName ?? 'A friend'} · {visit.visitCount}{' '}
-                      {visit.visitCount === 1 ? 'visit' : 'visits'}
-                    </Text>
-                  );
-                })}
-              </View>
+              <>
+                <Pressable
+                  accessibilityLabel={`${friendVisits.length} friends have been here`}
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: friendVisitsExpanded }}
+                  onPress={() => setFriendVisitsExpanded((expanded) => !expanded)}
+                  style={({ pressed }) => [
+                    styles.locationHistorySummary,
+                    pressed && styles.locationHistorySummaryPressed,
+                  ]}
+                >
+                  <View style={styles.locationAvatarStack}>
+                    {friendVisits.slice(0, 4).map((visit, index) => {
+                      const friend = friends.find(
+                        (candidate) => candidate.authUserId === visit.authUserId,
+                      );
+                      return friend?.avatarUrl ? (
+                        <Image
+                          key={visit.authUserId}
+                          source={{ uri: friend.avatarUrl }}
+                          style={[styles.locationAvatar, index > 0 && styles.locationAvatarOverlap]}
+                        />
+                      ) : (
+                        <View
+                          key={visit.authUserId}
+                          style={[
+                            styles.locationAvatar,
+                            styles.locationAvatarFallback,
+                            index > 0 && styles.locationAvatarOverlap,
+                          ]}
+                        >
+                          <Text style={styles.locationAvatarInitials}>
+                            {friendInitials(friend?.displayName)}
+                          </Text>
+                        </View>
+                      );
+                    })}
+                    {friendVisits.length > 4 ? (
+                      <View
+                        style={[
+                          styles.locationAvatar,
+                          styles.locationAvatarMore,
+                          styles.locationAvatarOverlap,
+                        ]}
+                      >
+                        <Text style={styles.locationAvatarInitials}>
+                          +{friendVisits.length - 4}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  <Text style={styles.locationHistorySummaryText}>
+                    {friendVisits.length} {friendVisits.length === 1 ? 'FRIEND' : 'FRIENDS'}
+                  </Text>
+                  <Text style={styles.locationHistoryChevron}>
+                    {friendVisitsExpanded ? '⌃' : '⌄'}
+                  </Text>
+                </Pressable>
+
+                {friendVisitsExpanded ? (
+                  <View style={styles.locationHistory}>
+                    <Text style={styles.locationHistoryTitle}>✧ FRIENDS WHO HAVE BEEN HERE</Text>
+                    {friendVisits.map((visit) => {
+                      const friend = friends.find(
+                        (candidate) => candidate.authUserId === visit.authUserId,
+                      );
+                      return (
+                        <Text key={visit.authUserId} style={styles.locationHistoryText}>
+                          {friend?.displayName ?? 'A friend'} · {visit.visitCount}{' '}
+                          {visit.visitCount === 1 ? 'visit' : 'visits'}
+                        </Text>
+                      );
+                    })}
+                  </View>
+                ) : null}
+              </>
             ) : null}
-            <Text style={styles.modalMetadata}>{isHost ? 'ツ HOSTED BY YOU' : 'ツ FRIEND HANG'}</Text>
+            <Text style={styles.modalMetadata}>
+              {isHost ? 'ツ HOSTED BY YOU' : 'ツ FRIEND HANG'}
+            </Text>
 
             {isInvited ? <Text style={styles.inviteNotice}>YOU ARE INVITED</Text> : null}
             {actionError ? <Text style={styles.errorBanner}>{actionError}</Text> : null}
@@ -557,7 +902,11 @@ function HangoutDetailsModal({
               ) : null}
             </View>
             {isHost ? (
-              <Pressable disabled={actionPending} onPress={confirmDelete} style={styles.deleteAction}>
+              <Pressable
+                disabled={actionPending}
+                onPress={confirmDelete}
+                style={styles.deleteAction}
+              >
                 <Text style={styles.deleteActionText}>
                   {actionPending ? 'DELETING...' : 'DELETE HANG'}
                 </Text>
@@ -571,6 +920,9 @@ function HangoutDetailsModal({
 }
 
 function PaperSpeckles() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   return (
     <View pointerEvents="none" style={styles.speckles}>
       {Array.from({ length: 22 }).map((_, index) => (
@@ -622,335 +974,556 @@ function sameDay(left: Date, right: Date) {
   return dateKey(left) === dateKey(right);
 }
 
-function avatarColor(index: number) {
-  return [COLORS.coral, '#f8b3d2', '#8dded1', '#c7a3ff', '#ffd084', '#98c9ff'][index % 6];
+function sameMonth(left: Date, right: Date) {
+  return left.getFullYear() === right.getFullYear() && left.getMonth() === right.getMonth();
+}
+
+function matchesHangoutFilters(
+  hangout: Hangout,
+  search: string,
+  dateFilter: HangoutDateFilter | null,
+) {
+  const normalizedSearch = search.trim().toLocaleLowerCase();
+  const matchesSearch =
+    normalizedSearch.length === 0 ||
+    hangout.hangoutName.toLocaleLowerCase().includes(normalizedSearch) ||
+    hangout.location.toLocaleLowerCase().includes(normalizedSearch);
+  const hangoutDate = new Date(hangout.startTime);
+  const matchesDate =
+    dateFilter === null ||
+    (dateFilter.mode === 'day'
+      ? sameDay(hangoutDate, dateFilter.date)
+      : sameMonth(hangoutDate, dateFilter.date));
+  return matchesSearch && matchesDate;
+}
+
+function formatFilterDate(date: Date) {
+  return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }).toUpperCase();
+}
+
+function formatFilterMonth(date: Date) {
+  return date.toLocaleDateString(undefined, { month: 'short', year: 'numeric' }).toUpperCase();
+}
+
+function avatarColor(index: number, colors: AppColors) {
+  return [colors.coral, '#8B7898', colors.teal, colors.yellow, colors.primary][index % 5];
+}
+
+function friendInitials(displayName?: string) {
+  if (!displayName) return '?';
+  return displayName
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('');
 }
 
 const MONO = FONTS.secondary;
 
-const styles = StyleSheet.create({
-  safeArea: { backgroundColor: '#fbf5ef', flex: 1 },
-  screen: { backgroundColor: '#fbf5ef', flex: 1 },
-  speckles: { ...StyleSheet.absoluteFillObject, overflow: 'hidden' },
-  speck: { backgroundColor: 'rgba(156, 65, 65, 0.16)', height: 1, position: 'absolute', width: 3 },
-  topBar: {
-    alignItems: 'center',
-    backgroundColor: 'rgba(251,245,239,0.96)',
-    borderBottomColor: COLORS.teal,
-    borderBottomWidth: 1,
-    flexDirection: 'row',
-    height: 66,
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    zIndex: 2,
-  },
-  brandRow: { alignItems: 'center', flexDirection: 'row' },
-  menuIcon: { color: COLORS.primary, fontSize: 22, marginRight: 14 },
-  brand: { color: COLORS.primary, fontFamily: MONO, fontSize: 17, fontWeight: '700' },
-  avatar: { borderColor: COLORS.primary, borderWidth: 2, height: 40, width: 40 },
-  content: { paddingBottom: 128, paddingHorizontal: 16, paddingTop: 18 },
-  monthHeader: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  monthArrowButton: {
-    alignItems: 'center',
-    backgroundColor: 'rgba(132,165,157,0.12)',
-    borderColor: COLORS.tealDark,
-    borderRadius: 18,
-    borderWidth: 1.5,
-    height: 36,
-    justifyContent: 'center',
-    width: 36,
-  },
-  monthArrowPressed: { backgroundColor: 'rgba(132,165,157,0.24)', opacity: 0.72 },
-  monthArrow: {
-    color: COLORS.tealDark,
-    fontFamily: FONTS.secondary,
-    fontSize: 29,
-    lineHeight: 31,
-    textAlign: 'center',
-  },
-  monthTitle: {
-    color: '#171413',
-    fontFamily: FONTS.secondaryBold,
-    fontSize: 36,
-    lineHeight: 42,
-    textTransform: 'lowercase',
-  },
-  monthName: { fontFamily: FONTS.secondaryBold },
-  calendarFrame: {
-    borderColor: COLORS.black,
-    borderRadius: 7,
-    borderWidth: 2,
-    overflow: 'hidden',
-    padding: 12,
-  },
-  weekdayRow: {
-    borderBottomColor: COLORS.teal,
-    borderBottomWidth: 2,
-    flexDirection: 'row',
-    paddingBottom: 10,
-  },
-  weekday: { color: COLORS.text, flex: 1, fontFamily: MONO, fontSize: 12, textAlign: 'center' },
-  calendarGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingTop: 8 },
-  dayCell: {
-    alignItems: 'center',
-    borderColor: 'rgba(132, 165, 157, 0.24)',
-    borderWidth: StyleSheet.hairlineWidth,
-    height: 48,
-    justifyContent: 'center',
-    position: 'relative',
-    width: '14.285714%',
-  },
-  todayCell: {
-    backgroundColor: COLORS.yellow,
-    borderColor: COLORS.teal,
-    borderWidth: 1.5,
-    borderRadius: 4,
-  },
-  selectedCell: {
-    backgroundColor: 'rgba(132,165,157,0.14)',
-    borderColor: COLORS.tealDark,
-    borderWidth: 1.5,
-    borderRadius: 4,
-  },
-  dayNumber: { color: '#211e1c', fontFamily: MONO, fontSize: 15 },
-  todayNumber: { fontWeight: '800' },
-  outsideMonth: { color: 'rgba(85, 66, 65, 0.28)' },
-  hangoutMarker: { color: COLORS.teal, fontSize: 12, position: 'absolute', right: 3, top: 2 },
-  passedHangoutMarker: { color: COLORS.primary, opacity: 0.55 },
-  hangoutCount: {
-    bottom: 1,
-    color: COLORS.primary,
-    fontFamily: MONO,
-    fontSize: 8,
-    position: 'absolute',
-    right: 2,
-  },
-  switchRow: { flexDirection: 'row', marginTop: 18 },
-  switchButton: {
-    alignItems: 'center',
-    borderColor: COLORS.primary,
-    borderWidth: 2,
-    flex: 1,
-    justifyContent: 'center',
-    minHeight: 42,
-    margin: 2,
-  },
-  switchButtonActive: { backgroundColor: COLORS.primary },
-  switchButtonText: {
-    color: '#211e1c',
-    fontFamily: FONTS.primary,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  switchButtonTextActive: { color: '#fffaf5' },
-  sectionTitle: {
-    color: '#211e1c',
-    fontFamily: MONO,
-    fontSize: 18,
-    fontWeight: '800',
-    marginBottom: 16,
-    marginTop: 38,
-  },
-  sparkle: { color: COLORS.coral, fontSize: 28 },
-  errorBanner: {
-    backgroundColor: 'rgba(156,65,65,0.10)',
-    color: COLORS.primary,
-    fontFamily: MONO,
-    fontSize: 11,
-    marginBottom: 12,
-    padding: 10,
-  },
-  loadingCard: {
-    alignItems: 'center',
-    borderColor: COLORS.teal,
-    borderWidth: 2,
-    justifyContent: 'center',
-    minHeight: 210,
-  },
-  loadingText: { color: COLORS.text, fontFamily: MONO, fontSize: 11, marginTop: 12 },
-  emptyCard: {
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.35)',
-    borderColor: COLORS.tealDark,
-    borderRadius: 7,
-    borderWidth: 2,
-    justifyContent: 'center',
-    minHeight: 310,
-    padding: 22,
-    shadowColor: COLORS.teal,
-    shadowOffset: { height: 6, width: 6 },
-    shadowOpacity: 0.7,
-    shadowRadius: 0,
-  },
-  emptyTitle: { color: '#171413', fontFamily: MONO, fontSize: 22, marginBottom: 14 },
-  createEmptyButton: {
-    backgroundColor: 'rgba(132,165,157,0.12)',
-    borderColor: COLORS.teal,
-    borderWidth: 1,
-    paddingHorizontal: 28,
-    paddingVertical: 10,
-  },
-  createEmptyText: {
-    color: COLORS.tealDark,
-    fontFamily: MONO,
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 1.5,
-  },
-  cardList: { alignItems: 'center' },
-  modalBackdrop: {
-    alignItems: 'center',
-    // backgroundColor: 'rgba(167, 154, 146, 0.42)',
-    flex: 1,
-    justifyContent: 'center',
-    padding: 28,
-  },
-  modalBorder: {
-    borderColor: COLORS.black,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    overflow: 'hidden',
-    width: '100%',
-    maxWidth: 420,
-  },
-  glassCard: {
-    borderRadius: 10,
-    maxWidth: 420,
-    padding: 30,
-    width: '100%',
-    // backgroundColor: COLORS.background,
-    backgroundColor: 'rgba(255, 246, 239, 0.42)',
-  },
-  modalClose: {
-    alignItems: 'center',
-    height: 34,
-    justifyContent: 'center',
-    position: 'absolute',
-    right: 9,
-    top: 7,
-    width: 34,
-  },
-  modalCloseText: { color: COLORS.text, fontSize: 28 },
-  modalTitle: {
-    color: '#211e1c',
-    fontFamily: FONTS.secondaryLight,
-    fontSize: 25,
-    marginBottom: 8,
-    marginTop: 12,
-    textTransform: 'lowercase',
-  },
-  modalBadgeRow: {
-    alignItems: 'flex-start',
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  modalMetadata: {
-    color: COLORS.text,
-    fontFamily: FONTS.primary,
-    fontSize: 11,
-    letterSpacing: 1.2,
-    lineHeight: 23,
-    textTransform: 'uppercase',
-  },
-  locationHistory: {
-    backgroundColor: 'rgba(132,165,157,0.12)',
-    borderColor: COLORS.teal,
-    borderWidth: 1,
-    marginBottom: 12,
-    padding: 10,
-  },
-  locationHistoryTitle: {
-    color: COLORS.tealDark,
-    fontFamily: FONTS.primaryBold,
-    fontSize: 9,
-    letterSpacing: 0.6,
-    marginBottom: 6,
-  },
-  locationHistoryText: {
-    color: COLORS.text,
-    fontFamily: FONTS.primary,
-    fontSize: 10,
-    lineHeight: 16,
-  },
-  locationHistoryLoading: {
-    color: COLORS.muted,
-    fontFamily: FONTS.primary,
-    fontSize: 9,
-    marginBottom: 12,
-  },
-  participantGrid: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 14, marginTop: 12 },
-  participant: { alignItems: 'center', flexDirection: 'row', marginBottom: 8, width: '50%' },
-  participantAvatar: {
-    alignItems: 'center',
-    borderRadius: 12,
-    height: 24,
-    justifyContent: 'center',
-    marginRight: 8,
-    width: 24,
-  },
-  participantAvatarText: { color: '#fff', fontFamily: FONTS.primary, fontSize: 10 },
-  participantName: { color: COLORS.text, flex: 1, fontFamily: FONTS.primary, fontSize: 11 },
-  aboutTitle: {
-    color: '#211e1c',
-    fontFamily: FONTS.secondaryLight,
-    fontSize: 19,
-    marginBottom: 10,
-    marginTop: 4,
-  },
-  description: {
-    color: COLORS.text,
-    fontFamily: FONTS.primary,
-    fontSize: 11,
-    lineHeight: 20,
-    marginBottom: 12,
-  },
-  modalActions: { flexDirection: 'row', marginTop: 18 },
-  inviteNotice: {
-    color: COLORS.tealDark,
-    fontFamily: FONTS.primaryBold,
-    fontSize: 11,
-    marginTop: 10,
-  },
-  primaryAction: {
-    alignItems: 'center',
-    backgroundColor: COLORS.primary,
-    flex: 1,
-    justifyContent: 'center',
-    minHeight: 38,
-    margin: 2,
-  },
-  primaryActionText: {
-    color: '#fff',
-    fontFamily: FONTS.primary,
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  secondaryAction: {
-    alignItems: 'center',
-    borderColor: COLORS.primary,
-    borderWidth: 2,
-    flex: 1,
-    justifyContent: 'center',
-    minHeight: 38,
-    margin: 2,
-  },
-  secondaryActionText: {
-    color: COLORS.text,
-    fontFamily: FONTS.primary,
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  deleteAction: { alignItems: 'center', marginTop: 12, paddingVertical: 8 },
-  deleteActionText: {
-    color: COLORS.primary,
-    fontFamily: FONTS.primaryBold,
-    fontSize: 10,
-    letterSpacing: 0.8,
-  },
-});
+function createStyles(colors: AppColors) {
+  return StyleSheet.create({
+    safeArea: { backgroundColor: colors.background, flex: 1 },
+    screen: { backgroundColor: colors.background, flex: 1 },
+    speckles: { ...StyleSheet.absoluteFillObject, overflow: 'hidden' },
+    speck: {
+      backgroundColor: colors.coral,
+      height: 1,
+      opacity: 0.16,
+      position: 'absolute',
+      width: 3,
+    },
+    topBar: {
+      alignItems: 'center',
+      backgroundColor: 'rgba(251,245,239,0.96)',
+      borderBottomColor: colors.teal,
+      borderBottomWidth: 1,
+      flexDirection: 'row',
+      height: 66,
+      justifyContent: 'space-between',
+      paddingHorizontal: 20,
+      zIndex: 2,
+    },
+    brandRow: { alignItems: 'center', flexDirection: 'row' },
+    menuIcon: { color: colors.primary, fontSize: 22, marginRight: 14 },
+    brand: { color: colors.primary, fontFamily: MONO, fontSize: 17, fontWeight: '700' },
+    avatar: { borderColor: colors.primary, borderWidth: 2, height: 40, width: 40 },
+    content: { paddingBottom: 128, paddingHorizontal: 16, paddingTop: 18 },
+    monthHeader: {
+      alignItems: 'center',
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginBottom: 16,
+    },
+    monthArrowButton: {
+      alignItems: 'center',
+      backgroundColor: 'rgba(132,165,157,0.12)',
+      borderColor: colors.tealDark,
+      borderRadius: 18,
+      borderWidth: 1.5,
+      height: 36,
+      justifyContent: 'center',
+      width: 36,
+    },
+    monthArrowPressed: { backgroundColor: 'rgba(132,165,157,0.24)', opacity: 0.72 },
+    monthArrow: {
+      color: colors.tealDark,
+      fontFamily: FONTS.secondary,
+      fontSize: 29,
+      lineHeight: 31,
+      textAlign: 'center',
+    },
+    monthTitle: {
+      color: colors.black,
+      fontFamily: FONTS.secondaryBold,
+      fontSize: 36,
+      lineHeight: 42,
+      textTransform: 'lowercase',
+    },
+    monthName: { fontFamily: FONTS.secondaryBold },
+    calendarFrame: {
+      backgroundColor: colors.surface,
+      borderColor: colors.black,
+      borderRadius: 7,
+      borderWidth: 2,
+      overflow: 'hidden',
+      padding: 12,
+    },
+    weekdayRow: {
+      borderBottomColor: colors.teal,
+      borderBottomWidth: 2,
+      flexDirection: 'row',
+      paddingBottom: 10,
+    },
+    weekday: { color: colors.text, flex: 1, fontFamily: MONO, fontSize: 12, textAlign: 'center' },
+    calendarGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingTop: 8 },
+    dayCell: {
+      alignItems: 'center',
+      borderColor: 'rgba(132, 165, 157, 0.24)',
+      borderWidth: StyleSheet.hairlineWidth,
+      height: 48,
+      justifyContent: 'center',
+      position: 'relative',
+      width: '14.285714%',
+    },
+    todayCell: {
+      backgroundColor: colors.yellow,
+      borderColor: colors.teal,
+      borderWidth: 1.5,
+      borderRadius: 4,
+    },
+    selectedCell: {
+      backgroundColor: 'rgba(132,165,157,0.14)',
+      borderColor: colors.tealDark,
+      borderWidth: 1.5,
+      borderRadius: 4,
+    },
+    dayNumber: { color: colors.black, fontFamily: MONO, fontSize: 15 },
+    todayNumber: { fontWeight: '800' },
+    outsideMonth: { color: colors.muted, opacity: 0.4 },
+    hangoutMarker: { color: colors.teal, fontSize: 12, position: 'absolute', right: 3, top: 2 },
+    passedHangoutMarker: { color: colors.primary, opacity: 0.55 },
+    hangoutCount: {
+      bottom: 1,
+      color: colors.primary,
+      fontFamily: MONO,
+      fontSize: 8,
+      position: 'absolute',
+      right: 2,
+    },
+    visitPromptList: { gap: 10, marginTop: 16 },
+    visitPrompt: {
+      alignItems: 'center',
+      backgroundColor: colors.surface,
+      borderColor: colors.tealDark,
+      borderRadius: 7,
+      borderWidth: 1.5,
+      flexDirection: 'row',
+      minHeight: 88,
+      padding: 11,
+      shadowColor: colors.teal,
+      shadowOffset: { height: 3, width: 3 },
+      shadowOpacity: 0.35,
+      shadowRadius: 0,
+    },
+    visitPromptCopy: { flex: 1, paddingRight: 10 },
+    visitPromptKicker: {
+      color: colors.primary,
+      fontFamily: FONTS.primaryBold,
+      fontSize: 9,
+      letterSpacing: 0.8,
+    },
+    visitPromptTitle: {
+      color: colors.black,
+      fontFamily: FONTS.secondaryBold,
+      fontSize: 16,
+      marginTop: 3,
+      textTransform: 'lowercase',
+    },
+    visitPromptMessage: {
+      color: colors.muted,
+      fontFamily: FONTS.secondaryLight,
+      fontSize: 12,
+      marginTop: 3,
+    },
+    visitPromptActions: {
+      alignItems: 'center',
+      flexDirection: 'row',
+      gap: 7,
+      minWidth: 83,
+    },
+    attendanceButton: {
+      alignItems: 'center',
+      borderColor: colors.primary,
+      borderRadius: 18,
+      borderWidth: 1.5,
+      height: 36,
+      justifyContent: 'center',
+      width: 36,
+    },
+    confirmButton: { backgroundColor: colors.tealDark, borderColor: colors.tealDark },
+    declineText: { color: colors.primary, fontFamily: FONTS.primaryBold, fontSize: 19 },
+    confirmText: { color: colors.surface, fontFamily: FONTS.primaryBold, fontSize: 17 },
+    visitPromptArrow: { color: colors.primary, fontFamily: FONTS.primaryBold, fontSize: 22 },
+    promptPressed: { opacity: 0.58 },
+    switchRow: { flexDirection: 'row', gap: 10, marginTop: 18 },
+    switchButton: {
+      alignItems: 'center',
+      backgroundColor: colors.surface,
+      borderColor: colors.mutedBorder,
+      borderRadius: 20,
+      borderWidth: 1,
+      flex: 1,
+      justifyContent: 'center',
+      minHeight: 40,
+      paddingHorizontal: 12,
+    },
+    switchButtonActive: { backgroundColor: colors.tealSoft, borderColor: colors.teal },
+    switchButtonPressed: { opacity: 0.65, transform: [{ scale: 0.98 }] },
+    switchButtonText: {
+      color: colors.muted,
+      fontFamily: FONTS.primaryBold,
+      fontSize: 10,
+      letterSpacing: 0.55,
+    },
+    switchButtonTextActive: { color: colors.tealDark },
+    createHangButton: { backgroundColor: colors.tealSoft, borderColor: colors.teal },
+    createHangButtonText: { color: colors.tealDark },
+    filterPanel: {
+      backgroundColor: colors.surface,
+      borderColor: colors.mutedBorder,
+      borderRadius: 12,
+      borderWidth: 1,
+      marginBottom: 16,
+      padding: 12,
+    },
+    hangoutSearchInput: {
+      backgroundColor: colors.background,
+      borderColor: colors.teal,
+      borderRadius: 8,
+      borderWidth: 1,
+      color: colors.black,
+      fontFamily: FONTS.primary,
+      fontSize: 10,
+      minHeight: 42,
+      paddingHorizontal: 12,
+    },
+    filterActionRow: { flexDirection: 'row', gap: 8, marginTop: 9 },
+    dateFilterButton: {
+      alignItems: 'center',
+      backgroundColor: colors.tealSoft,
+      borderColor: colors.teal,
+      borderRadius: 18,
+      borderWidth: 1,
+      flex: 1,
+      justifyContent: 'center',
+      minHeight: 36,
+      paddingHorizontal: 11,
+    },
+    dateFilterButtonActive: { backgroundColor: colors.tealDark },
+    dateFilterButtonText: {
+      color: colors.tealDark,
+      fontFamily: FONTS.primaryBold,
+      fontSize: 9,
+      letterSpacing: 0.5,
+    },
+    dateFilterButtonTextActive: { color: colors.surface },
+    clearFiltersButton: {
+      alignItems: 'center',
+      borderColor: colors.mutedBorder,
+      borderRadius: 18,
+      borderWidth: 1,
+      justifyContent: 'center',
+      minHeight: 36,
+      paddingHorizontal: 14,
+    },
+    clearFiltersButtonText: {
+      color: colors.primary,
+      fontFamily: FONTS.primaryBold,
+      fontSize: 9,
+      letterSpacing: 0.5,
+    },
+    dateFilterHint: {
+      color: colors.muted,
+      fontFamily: FONTS.secondaryLight,
+      fontSize: 11,
+      marginTop: 8,
+    },
+    sectionTitle: {
+      color: colors.black,
+      fontFamily: MONO,
+      fontSize: 18,
+      fontWeight: '800',
+      marginBottom: 16,
+      marginTop: 38,
+    },
+    sparkle: { color: colors.coral, fontSize: 28 },
+    errorBanner: {
+      backgroundColor: 'rgba(156,65,65,0.10)',
+      color: colors.primary,
+      fontFamily: MONO,
+      fontSize: 11,
+      marginBottom: 12,
+      padding: 10,
+    },
+    loadingCard: {
+      alignItems: 'center',
+      borderColor: colors.teal,
+      borderWidth: 2,
+      justifyContent: 'center',
+      minHeight: 210,
+    },
+    loadingText: { color: colors.text, fontFamily: MONO, fontSize: 11, marginTop: 12 },
+    emptyCard: {
+      alignItems: 'center',
+      backgroundColor: colors.surface,
+      borderColor: colors.tealDark,
+      borderRadius: 7,
+      borderWidth: 2,
+      justifyContent: 'center',
+      minHeight: 310,
+      padding: 22,
+      shadowColor: colors.teal,
+      shadowOffset: { height: 6, width: 6 },
+      shadowOpacity: 0.7,
+      shadowRadius: 0,
+    },
+    emptyTitle: { color: colors.black, fontFamily: MONO, fontSize: 22, marginBottom: 14 },
+    createEmptyButton: {
+      backgroundColor: 'rgba(132,165,157,0.12)',
+      borderColor: colors.teal,
+      borderWidth: 1,
+      paddingHorizontal: 28,
+      paddingVertical: 10,
+    },
+    createEmptyText: {
+      color: colors.tealDark,
+      fontFamily: MONO,
+      fontSize: 12,
+      fontWeight: '700',
+      letterSpacing: 1.5,
+    },
+    cardList: { alignItems: 'center' },
+    modalBackdrop: {
+      alignItems: 'center',
+      // backgroundColor: 'rgba(167, 154, 146, 0.42)',
+      flex: 1,
+      justifyContent: 'center',
+      padding: 28,
+    },
+    modalBorder: {
+      borderColor: colors.black,
+      borderRadius: 10,
+      borderWidth: 1.5,
+      overflow: 'hidden',
+      width: '100%',
+      maxWidth: 420,
+    },
+    glassCard: {
+      borderRadius: 10,
+      maxWidth: 420,
+      padding: 30,
+      width: '100%',
+      backgroundColor: colors.surface,
+    },
+    modalClose: {
+      alignItems: 'center',
+      height: 34,
+      justifyContent: 'center',
+      position: 'absolute',
+      right: 9,
+      top: 7,
+      width: 34,
+    },
+    modalCloseText: { color: colors.text, fontSize: 28 },
+    modalTitle: {
+      color: colors.black,
+      fontFamily: FONTS.secondaryLight,
+      fontSize: 25,
+      marginBottom: 8,
+      marginTop: 12,
+      textTransform: 'lowercase',
+    },
+    modalBadgeRow: {
+      alignItems: 'flex-start',
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 6,
+    },
+    modalMetadata: {
+      color: colors.text,
+      fontFamily: FONTS.primary,
+      fontSize: 11,
+      letterSpacing: 1.2,
+      lineHeight: 23,
+      textTransform: 'uppercase',
+    },
+    locationHistory: {
+      backgroundColor: 'rgba(132,165,157,0.12)',
+      borderColor: colors.teal,
+      borderWidth: 1,
+      marginBottom: 12,
+      padding: 10,
+    },
+    locationHistorySummary: {
+      alignItems: 'center',
+      alignSelf: 'flex-start',
+      backgroundColor: 'rgba(132,165,157,0.12)',
+      borderColor: colors.teal,
+      borderRadius: 20,
+      borderWidth: 1,
+      flexDirection: 'row',
+      marginBottom: 10,
+      marginTop: 4,
+      minHeight: 42,
+      paddingHorizontal: 8,
+    },
+    locationHistorySummaryPressed: { backgroundColor: 'rgba(132,165,157,0.24)', opacity: 0.72 },
+    locationAvatarStack: { alignItems: 'center', flexDirection: 'row' },
+    locationAvatar: {
+      borderColor: colors.surface,
+      borderRadius: 15,
+      borderWidth: 2,
+      height: 30,
+      width: 30,
+    },
+    locationAvatarOverlap: { marginLeft: -9 },
+    locationAvatarFallback: {
+      alignItems: 'center',
+      backgroundColor: colors.tealDark,
+      justifyContent: 'center',
+    },
+    locationAvatarMore: {
+      alignItems: 'center',
+      backgroundColor: colors.primary,
+      justifyContent: 'center',
+    },
+    locationAvatarInitials: {
+      color: '#fffaf5',
+      fontFamily: FONTS.primaryBold,
+      fontSize: 8,
+    },
+    locationHistorySummaryText: {
+      color: colors.tealDark,
+      fontFamily: FONTS.primaryBold,
+      fontSize: 9,
+      letterSpacing: 0.5,
+      marginLeft: 9,
+    },
+    locationHistoryChevron: {
+      color: colors.primary,
+      fontFamily: FONTS.primaryBold,
+      fontSize: 16,
+      marginLeft: 7,
+      marginTop: -3,
+    },
+    locationHistoryTitle: {
+      color: colors.tealDark,
+      fontFamily: FONTS.primaryBold,
+      fontSize: 9,
+      letterSpacing: 0.6,
+      marginBottom: 6,
+    },
+    locationHistoryText: {
+      color: colors.text,
+      fontFamily: FONTS.primary,
+      fontSize: 10,
+      lineHeight: 16,
+    },
+    locationHistoryLoading: {
+      color: colors.muted,
+      fontFamily: FONTS.primary,
+      fontSize: 9,
+      marginBottom: 12,
+    },
+    participantGrid: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 14, marginTop: 12 },
+    participant: { alignItems: 'center', flexDirection: 'row', marginBottom: 8, width: '50%' },
+    participantAvatar: {
+      alignItems: 'center',
+      borderRadius: 12,
+      height: 24,
+      justifyContent: 'center',
+      marginRight: 8,
+      width: 24,
+    },
+    participantAvatarText: { color: '#fff', fontFamily: FONTS.primary, fontSize: 10 },
+    participantName: { color: colors.text, flex: 1, fontFamily: FONTS.primary, fontSize: 11 },
+    aboutTitle: {
+      color: colors.black,
+      fontFamily: FONTS.secondaryLight,
+      fontSize: 19,
+      marginBottom: 10,
+      marginTop: 4,
+    },
+    description: {
+      color: colors.text,
+      fontFamily: FONTS.primary,
+      fontSize: 11,
+      lineHeight: 20,
+      marginBottom: 12,
+    },
+    modalActions: { flexDirection: 'row', marginTop: 18 },
+    inviteNotice: {
+      color: colors.tealDark,
+      fontFamily: FONTS.primaryBold,
+      fontSize: 11,
+      marginTop: 10,
+    },
+    primaryAction: {
+      alignItems: 'center',
+      backgroundColor: colors.primary,
+      flex: 1,
+      justifyContent: 'center',
+      minHeight: 38,
+      margin: 2,
+    },
+    primaryActionText: {
+      color: '#fff',
+      fontFamily: FONTS.primary,
+      fontSize: 11,
+      fontWeight: '700',
+    },
+    secondaryAction: {
+      alignItems: 'center',
+      borderColor: colors.primary,
+      borderWidth: 2,
+      flex: 1,
+      justifyContent: 'center',
+      minHeight: 38,
+      margin: 2,
+    },
+    secondaryActionText: {
+      color: colors.text,
+      fontFamily: FONTS.primary,
+      fontSize: 11,
+      fontWeight: '700',
+    },
+    deleteAction: { alignItems: 'center', marginTop: 12, paddingVertical: 8 },
+    deleteActionText: {
+      color: colors.primary,
+      fontFamily: FONTS.primaryBold,
+      fontSize: 10,
+      letterSpacing: 0.8,
+    },
+  });
+}

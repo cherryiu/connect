@@ -9,6 +9,8 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Optional;
+import org.bson.types.ObjectId;
 
 @ApplicationScoped
 public class HangoutRecordRepository implements PanacheMongoRepository<HangoutRecord> {
@@ -21,5 +23,9 @@ public class HangoutRecordRepository implements PanacheMongoRepository<HangoutRe
                         Filters.ne("location", "")
                 ))
                 .into(new ArrayList<>());
+    }
+
+    public Optional<HangoutRecord> findByAuthHangoutId(ObjectId authHangoutId) {
+        return find("authHangoutId", authHangoutId).firstResultOptional();
     }
 }

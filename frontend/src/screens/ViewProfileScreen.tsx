@@ -28,8 +28,9 @@ import {
   type FriendProfile,
   type UserProfileResponse,
 } from '../api/usersApi';
-import { COLORS, FONTS } from '../constants';
+import { FONTS } from '../constants';
 import { useAuth } from '../context/AuthContext';
+import { type AppColors, useTheme } from '../context/ThemeContext';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 
 type ProfileNavigation = NativeStackNavigationProp<RootStackParamList, 'ViewProfileScreen'>;
@@ -37,6 +38,8 @@ type ProfileNavigation = NativeStackNavigationProp<RootStackParamList, 'ViewProf
 export default function ViewProfileScreen() {
   const navigation = useNavigation<ProfileNavigation>();
   const { isLoading: authLoading, isLoggedIn, logout, user } = useAuth();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [profile, setProfile] = useState<UserProfileResponse>();
   const [friends, setFriends] = useState<FriendProfile[]>([]);
   const [hangouts, setHangouts] = useState<Hangout[]>([]);
@@ -155,7 +158,7 @@ export default function ViewProfileScreen() {
                 void loadProfile();
               }}
               refreshing={refreshing}
-              tintColor={COLORS.primary}
+              tintColor={colors.primary}
             />
           }
           showsVerticalScrollIndicator={false}
@@ -165,7 +168,7 @@ export default function ViewProfileScreen() {
               <Image source={{ uri: avatarUrl }} style={styles.avatar} />
             ) : (
               <LinearGradient
-                colors={[COLORS.yellow, '#f7a7c6', '#b8b8ff']}
+                colors={[colors.yellow, colors.coral, colors.teal]}
                 end={{ x: 1, y: 1 }}
                 start={{ x: 0, y: 0 }}
                 style={styles.avatar}
@@ -177,7 +180,7 @@ export default function ViewProfileScreen() {
             <View style={styles.stats}>
               <Text style={styles.statsTitle}>Stats</Text>
               {loading ? (
-                <ActivityIndicator color={COLORS.tealDark} size="small" style={styles.loader} />
+                <ActivityIndicator color={colors.tealDark} size="small" style={styles.loader} />
               ) : (
                 <>
                   <Text style={styles.statLine}>{stats.attended} hangs attended</Text>
@@ -252,6 +255,8 @@ function PlacesVisitedBox({
   onPress: () => void;
   places: LocationVisitSummary[];
 }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const totalVisits = places.reduce((total, place) => total + place.visitCount, 0);
 
   return (
@@ -264,7 +269,7 @@ function PlacesVisitedBox({
       <View>
         <Text style={styles.placesLabel}>PLACES VISITED</Text>
         {loading ? (
-          <ActivityIndicator color={COLORS.tealDark} size="small" style={styles.placesLoader} />
+          <ActivityIndicator color={colors.tealDark} size="small" style={styles.placesLoader} />
         ) : (
           <Text style={styles.placesCount}>
             {places.length} {places.length === 1 ? 'place' : 'places'} · {totalVisits}{' '}
@@ -278,6 +283,9 @@ function PlacesVisitedBox({
 }
 
 function FriendsPanel({ friends }: { friends: FriendProfile[] }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   return (
     <View style={styles.friendsSection}>
       <Text style={styles.sectionLabel}>FRIENDS</Text>
@@ -306,6 +314,9 @@ function FriendsPanel({ friends }: { friends: FriendProfile[] }) {
 }
 
 function PaperSpeckles() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   return (
     <View pointerEvents="none" style={styles.speckles}>
       {Array.from({ length: 24 }).map((_, index) => (
@@ -336,191 +347,199 @@ function initials(displayName: string) {
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: { backgroundColor: '#fbf5ef', flex: 1 },
-  screen: { backgroundColor: '#fbf5ef', flex: 1 },
-  speckles: { ...StyleSheet.absoluteFillObject, overflow: 'hidden' },
-  speck: { backgroundColor: 'rgba(156, 65, 65, 0.16)', height: 1, position: 'absolute', width: 3 },
-  header: {
-    alignItems: 'center',
-    backgroundColor: 'rgba(251,245,239,0.94)',
-    borderBottomColor: COLORS.teal,
-    borderBottomWidth: 1,
-    flexDirection: 'row',
-    height: 66,
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-  },
-  back: { color: COLORS.primary, fontSize: 38, lineHeight: 40 },
-  headerTitle: {
-    color: COLORS.primary,
-    fontFamily: FONTS.primaryBold,
-    fontSize: 16,
-    letterSpacing: 1.2,
-  },
-  headerSpacer: { width: 22 },
-  content: { paddingBottom: 64, paddingHorizontal: 22, paddingTop: 32 },
-  summaryRow: { alignItems: 'center', flexDirection: 'row', marginBottom: 18 },
-  avatar: {
-    alignItems: 'center',
-    borderColor: 'rgba(255,255,255,0.65)',
-    borderRadius: 50,
-    borderWidth: 1,
-    height: 100,
-    justifyContent: 'center',
-    marginRight: 18,
-    overflow: 'hidden',
-    width: 100,
-  },
-  avatarText: { color: '#fff', fontFamily: FONTS.secondaryLight, fontSize: 40 },
-  stats: { flex: 1 },
-  statsTitle: {
-    color: COLORS.black,
-    fontFamily: FONTS.primaryBold,
-    fontSize: 14,
-    letterSpacing: 0.5,
-    marginBottom: 7,
-  },
-  statLine: { color: COLORS.text, fontFamily: FONTS.primary, fontSize: 11, lineHeight: 18 },
-  loader: { alignSelf: 'flex-start', marginTop: 8 },
-  name: {
-    color: COLORS.black,
-    fontFamily: FONTS.secondaryBold,
-    fontSize: 38,
-    lineHeight: 42,
-    textTransform: 'lowercase',
-  },
-  bio: {
-    color: COLORS.text,
-    fontFamily: FONTS.secondaryLight,
-    fontSize: 16,
-    lineHeight: 23,
-    marginBottom: 28,
-    marginTop: 3,
-  },
-  placesBox: {
-    alignItems: 'center',
-    backgroundColor: 'rgba(132,165,157,0.12)',
-    borderColor: COLORS.tealDark,
-    borderWidth: 1.5,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 22,
-    minHeight: 76,
-    paddingHorizontal: 16,
-    paddingVertical: 13,
-  },
-  placesLabel: {
-    color: COLORS.tealDark,
-    fontFamily: FONTS.primaryBold,
-    fontSize: 10,
-    letterSpacing: 1,
-  },
-  placesCount: {
-    color: COLORS.black,
-    fontFamily: FONTS.secondary,
-    fontSize: 15,
-    marginTop: 6,
-  },
-  placesLoader: { alignSelf: 'flex-start', marginTop: 7 },
-  placesArrow: { color: COLORS.primary, fontFamily: FONTS.primary, fontSize: 24 },
-  error: {
-    backgroundColor: 'rgba(156,65,65,0.10)',
-    color: COLORS.primary,
-    fontFamily: FONTS.primary,
-    fontSize: 10,
-    marginBottom: 14,
-    padding: 10,
-  },
-  actions: { flexDirection: 'row' },
-  primaryAction: {
-    alignItems: 'center',
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
-    borderWidth: 1.5,
-    flex: 1,
-    justifyContent: 'center',
-    minHeight: 46,
-    paddingHorizontal: 8,
-  },
-  secondaryAction: {
-    alignItems: 'center',
-    borderColor: COLORS.primary,
-    borderWidth: 1.5,
-    flex: 1,
-    justifyContent: 'center',
-    marginLeft: 6,
-    minHeight: 46,
-    paddingHorizontal: 8,
-  },
-  primaryActionText: {
-    color: '#fffaf5',
-    fontFamily: FONTS.primaryBold,
-    fontSize: 10,
-    letterSpacing: 0.7,
-    textAlign: 'center',
-  },
-  secondaryActionText: {
-    color: COLORS.text,
-    fontFamily: FONTS.primaryBold,
-    fontSize: 10,
-    letterSpacing: 0.7,
-    textAlign: 'center',
-  },
-  pressed: { opacity: 0.58 },
-  editMessage: {
-    color: COLORS.muted,
-    fontFamily: FONTS.primary,
-    fontSize: 9,
-    letterSpacing: 0.5,
-    marginTop: 10,
-    textAlign: 'right',
-  },
-  friendsSection: { marginTop: 30 },
-  sectionLabel: {
-    color: COLORS.text,
-    fontFamily: FONTS.primaryBold,
-    fontSize: 10,
-    letterSpacing: 1.3,
-    marginBottom: 7,
-  },
-  friendList: {
-    backgroundColor: 'rgba(255,255,255,0.45)',
-    borderColor: COLORS.teal,
-    borderWidth: 1.5,
-    padding: 8,
-  },
-  friendRow: {
-    alignItems: 'center',
-    borderBottomColor: 'rgba(132,165,157,0.25)',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    flexDirection: 'row',
-    minHeight: 54,
-    paddingHorizontal: 7,
-    paddingVertical: 6,
-  },
-  friendAvatar: {
-    alignItems: 'center',
-    backgroundColor: 'rgba(132,165,157,0.18)',
-    borderColor: COLORS.teal,
-    borderRadius: 18,
-    borderWidth: 1,
-    height: 36,
-    justifyContent: 'center',
-    marginRight: 10,
-    width: 36,
-  },
-  friendInitials: { color: COLORS.tealDark, fontFamily: FONTS.primary, fontSize: 10 },
-  friendCopy: { flex: 1 },
-  friendName: { color: COLORS.black, fontFamily: FONTS.secondary, fontSize: 14 },
-  friendEmail: { color: COLORS.muted, fontFamily: FONTS.primary, fontSize: 9, marginTop: 2 },
-  friendMark: { color: COLORS.coral, fontSize: 18, marginLeft: 8 },
-  emptyFriends: { color: COLORS.muted, fontFamily: FONTS.primary, fontSize: 10, padding: 12 },
-  deleteAccount: { alignItems: 'center', marginTop: 34, paddingVertical: 12 },
-  deleteAccountText: {
-    color: COLORS.primary,
-    fontFamily: FONTS.primaryBold,
-    fontSize: 10,
-    letterSpacing: 0.8,
-  },
-});
+function createStyles(colors: AppColors) {
+  return StyleSheet.create({
+    safeArea: { backgroundColor: colors.background, flex: 1 },
+    screen: { backgroundColor: colors.background, flex: 1 },
+    speckles: { ...StyleSheet.absoluteFillObject, overflow: 'hidden' },
+    speck: {
+      backgroundColor: colors.coral,
+      height: 1,
+      opacity: 0.16,
+      position: 'absolute',
+      width: 3,
+    },
+    header: {
+      alignItems: 'center',
+      backgroundColor: colors.surface,
+      borderBottomColor: colors.teal,
+      borderBottomWidth: 1,
+      flexDirection: 'row',
+      height: 66,
+      justifyContent: 'space-between',
+      paddingHorizontal: 20,
+    },
+    back: { color: colors.primary, fontSize: 38, lineHeight: 40 },
+    headerTitle: {
+      color: colors.primary,
+      fontFamily: FONTS.primaryBold,
+      fontSize: 16,
+      letterSpacing: 1.2,
+    },
+    headerSpacer: { width: 22 },
+    content: { paddingBottom: 64, paddingHorizontal: 22, paddingTop: 32 },
+    summaryRow: { alignItems: 'center', flexDirection: 'row', marginBottom: 18 },
+    avatar: {
+      alignItems: 'center',
+      borderColor: 'rgba(255,255,255,0.65)',
+      borderRadius: 50,
+      borderWidth: 1,
+      height: 100,
+      justifyContent: 'center',
+      marginRight: 18,
+      overflow: 'hidden',
+      width: 100,
+    },
+    avatarText: { color: '#fff', fontFamily: FONTS.secondaryLight, fontSize: 40 },
+    stats: { flex: 1 },
+    statsTitle: {
+      color: colors.black,
+      fontFamily: FONTS.primaryBold,
+      fontSize: 14,
+      letterSpacing: 0.5,
+      marginBottom: 7,
+    },
+    statLine: { color: colors.text, fontFamily: FONTS.primary, fontSize: 11, lineHeight: 18 },
+    loader: { alignSelf: 'flex-start', marginTop: 8 },
+    name: {
+      color: colors.black,
+      fontFamily: FONTS.secondaryBold,
+      fontSize: 38,
+      lineHeight: 42,
+      textTransform: 'lowercase',
+    },
+    bio: {
+      color: colors.text,
+      fontFamily: FONTS.secondaryLight,
+      fontSize: 16,
+      lineHeight: 23,
+      marginBottom: 28,
+      marginTop: 3,
+    },
+    placesBox: {
+      alignItems: 'center',
+      backgroundColor: colors.surface,
+      borderColor: colors.tealDark,
+      borderWidth: 1.5,
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginBottom: 22,
+      minHeight: 76,
+      paddingHorizontal: 16,
+      paddingVertical: 13,
+    },
+    placesLabel: {
+      color: colors.tealDark,
+      fontFamily: FONTS.primaryBold,
+      fontSize: 10,
+      letterSpacing: 1,
+    },
+    placesCount: {
+      color: colors.black,
+      fontFamily: FONTS.secondary,
+      fontSize: 15,
+      marginTop: 6,
+    },
+    placesLoader: { alignSelf: 'flex-start', marginTop: 7 },
+    placesArrow: { color: colors.primary, fontFamily: FONTS.primary, fontSize: 24 },
+    error: {
+      backgroundColor: 'rgba(156,65,65,0.10)',
+      color: colors.primary,
+      fontFamily: FONTS.primary,
+      fontSize: 10,
+      marginBottom: 14,
+      padding: 10,
+    },
+    actions: { flexDirection: 'row' },
+    primaryAction: {
+      alignItems: 'center',
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+      borderWidth: 1.5,
+      flex: 1,
+      justifyContent: 'center',
+      minHeight: 46,
+      paddingHorizontal: 8,
+    },
+    secondaryAction: {
+      alignItems: 'center',
+      borderColor: colors.primary,
+      borderWidth: 1.5,
+      flex: 1,
+      justifyContent: 'center',
+      marginLeft: 6,
+      minHeight: 46,
+      paddingHorizontal: 8,
+    },
+    primaryActionText: {
+      color: '#fffaf5',
+      fontFamily: FONTS.primaryBold,
+      fontSize: 10,
+      letterSpacing: 0.7,
+      textAlign: 'center',
+    },
+    secondaryActionText: {
+      color: colors.text,
+      fontFamily: FONTS.primaryBold,
+      fontSize: 10,
+      letterSpacing: 0.7,
+      textAlign: 'center',
+    },
+    pressed: { opacity: 0.58 },
+    editMessage: {
+      color: colors.muted,
+      fontFamily: FONTS.primary,
+      fontSize: 9,
+      letterSpacing: 0.5,
+      marginTop: 10,
+      textAlign: 'right',
+    },
+    friendsSection: { marginTop: 30 },
+    sectionLabel: {
+      color: colors.text,
+      fontFamily: FONTS.primaryBold,
+      fontSize: 10,
+      letterSpacing: 1.3,
+      marginBottom: 7,
+    },
+    friendList: {
+      backgroundColor: colors.surface,
+      borderColor: colors.teal,
+      borderWidth: 1.5,
+      padding: 8,
+    },
+    friendRow: {
+      alignItems: 'center',
+      borderBottomColor: 'rgba(132,165,157,0.25)',
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      flexDirection: 'row',
+      minHeight: 54,
+      paddingHorizontal: 7,
+      paddingVertical: 6,
+    },
+    friendAvatar: {
+      alignItems: 'center',
+      backgroundColor: 'rgba(132,165,157,0.18)',
+      borderColor: colors.teal,
+      borderRadius: 18,
+      borderWidth: 1,
+      height: 36,
+      justifyContent: 'center',
+      marginRight: 10,
+      width: 36,
+    },
+    friendInitials: { color: colors.tealDark, fontFamily: FONTS.primary, fontSize: 10 },
+    friendCopy: { flex: 1 },
+    friendName: { color: colors.black, fontFamily: FONTS.secondary, fontSize: 14 },
+    friendEmail: { color: colors.muted, fontFamily: FONTS.primary, fontSize: 9, marginTop: 2 },
+    friendMark: { color: colors.coral, fontSize: 18, marginLeft: 8 },
+    emptyFriends: { color: colors.muted, fontFamily: FONTS.primary, fontSize: 10, padding: 12 },
+    deleteAccount: { alignItems: 'center', marginTop: 34, paddingVertical: 12 },
+    deleteAccountText: {
+      color: colors.primary,
+      fontFamily: FONTS.primaryBold,
+      fontSize: 10,
+      letterSpacing: 0.8,
+    },
+  });
+}

@@ -12,8 +12,15 @@ public class LocationVisit extends PanacheMongoEntity {
 
     public ObjectId authUserId;
     public ObjectId authHangoutId;
+    public String hangoutName;
     public String locationName;
     public String locationKey;
     public Instant visitedAt;
     public Instant createdAt;
+
+    /** Optional journal details. Existing automatically-created visits leave these unset. */
+    public String orderDescription;
+    public Integer orderRating;
+    public String notes;
+    public Boolean attendanceConfirmed;
 }

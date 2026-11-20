@@ -1,8 +1,9 @@
-import type { ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
 import { GlassContainer, GlassView } from 'expo-glass-effect';
 
-import { COLORS, FONTS } from '../../constants';
+import { FONTS } from '../../constants';
+import { type AppColors, useTheme } from '../../context/ThemeContext';
 
 type Props = {
   children: ReactNode;
@@ -35,6 +36,9 @@ export default function AuthFormContainer({
   testID,
   title,
 }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   return (
     <GlassContainer style={styles.container} testID={testID}>
       <GlassView style={styles.glassView} isInteractive glassEffectStyle="clear">
@@ -72,37 +76,39 @@ const message = {
   padding: 12,
 } as const;
 
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  glassView: { flex: 1, margin: 20, borderRadius: 20 },
-  content: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    padding: 20,
-  },
-  title: {
-    color: COLORS.black,
-    fontFamily: FONTS.secondaryItalic,
-    fontSize: 25,
-    fontWeight: 'bold',
-    marginBottom: 40,
-    marginTop: 40,
-    textAlign: 'center',
-  },
-  error: { ...message, backgroundColor: 'rgba(156,65,65,0.10)', color: COLORS.primary },
-  success: { ...message, backgroundColor: 'rgba(61,125,112,0.12)', color: COLORS.teal },
-  button: {
-    alignItems: 'center',
-    backgroundColor: COLORS.primary,
-    height: 45,
-    justifyContent: 'center',
-    marginBottom: 12,
-    marginTop: 20,
-    width: '100%',
-  },
-  buttonDisabled: { opacity: 0.6 },
-  buttonText: { color: '#fff', fontFamily: FONTS.primary, fontSize: 14 },
-  switchButton: { alignItems: 'center', padding: 8 },
-  switchPrompt: { color: COLORS.text, fontFamily: FONTS.secondary, fontSize: 13 },
-  switchLabel: { color: COLORS.primary, fontFamily: FONTS.primary, fontWeight: '700' },
-});
+function createStyles(colors: AppColors) {
+  return StyleSheet.create({
+    container: { flex: 1 },
+    glassView: { flex: 1, margin: 20, borderRadius: 20 },
+    content: {
+      flexGrow: 1,
+      justifyContent: 'center',
+      padding: 20,
+    },
+    title: {
+      color: colors.black,
+      fontFamily: FONTS.secondaryItalic,
+      fontSize: 25,
+      fontWeight: 'bold',
+      marginBottom: 40,
+      marginTop: 40,
+      textAlign: 'center',
+    },
+    error: { ...message, backgroundColor: 'rgba(156,65,65,0.10)', color: colors.primary },
+    success: { ...message, backgroundColor: 'rgba(61,125,112,0.12)', color: colors.teal },
+    button: {
+      alignItems: 'center',
+      backgroundColor: colors.primary,
+      height: 45,
+      justifyContent: 'center',
+      marginBottom: 12,
+      marginTop: 20,
+      width: '100%',
+    },
+    buttonDisabled: { opacity: 0.6 },
+    buttonText: { color: '#fff', fontFamily: FONTS.primary, fontSize: 14 },
+    switchButton: { alignItems: 'center', padding: 8 },
+    switchPrompt: { color: colors.text, fontFamily: FONTS.secondary, fontSize: 13 },
+    switchLabel: { color: colors.primary, fontFamily: FONTS.primary, fontWeight: '700' },
+  });
+}
