@@ -22,6 +22,10 @@ export type UserProfileRequest = {
   bio?: string;
 };
 
+export type UserProfileUpdateRequest = Omit<UserProfileRequest, 'password'> & {
+  password?: string;
+};
+
 export type FriendProfile = {
   authUserId: string;
   avatarUrl?: string;
@@ -55,7 +59,7 @@ export async function createUser(body: UserProfileRequest) {
   return response.data;
 }
 
-export async function updateCurrentUser(body: UserProfileRequest) {
+export async function updateCurrentUser(body: UserProfileUpdateRequest) {
   const response = await API.put<UserProfileResponse>('/api/users/update', body);
   return response.data;
 }

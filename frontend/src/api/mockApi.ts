@@ -8,7 +8,12 @@ import {
 import type { Hangout, HangoutRequest } from './hangoutsApi';
 import type { AuthStatusResponse } from './authApi';
 import type { LocationVisitDetail } from './locationApi';
-import type { FriendProfile, UserProfileRequest, UserProfileResponse } from './usersApi';
+import type {
+  FriendProfile,
+  UserProfileRequest,
+  UserProfileResponse,
+  UserProfileUpdateRequest,
+} from './usersApi';
 
 const MOCK_USER_ID = 'mock-user-1';
 let authenticated = false;
@@ -16,6 +21,16 @@ let users: UserProfileResponse[] = [];
 let hangouts: Hangout[] = createSeedHangouts();
 let locationVisits: MockLocationVisit[] = [];
 let standaloneOrders: MockStandaloneOrder[] = [];
+let currentMockProfile: UserProfileResponse = {
+  avatarUrl: undefined,
+  bio: 'Always down for coffee, a long walk, or trying somewhere new.',
+  createdAt: new Date().toISOString(),
+  displayName: 'Mock User',
+  email: 'mock@coze.local',
+  id: MOCK_USER_ID,
+  role: 'USER',
+  updatedAt: new Date().toISOString(),
+};
 let friends: FriendProfile[] = [
   {
     authUserId: 'mock-friend-ava',
@@ -116,9 +131,9 @@ async function handleMockRequest(config: InternalAxiosRequestConfig) {
       ? {
           authenticated: true,
           authUserId: MOCK_USER_ID,
-          avatarUrl: null,
-          displayName: 'Mock User',
-          email: 'mock@coze.local',
+          avatarUrl: currentMockProfile.avatarUrl ?? null,
+          displayName: currentMockProfile.displayName,
+          email: currentMockProfile.email,
         }
       : {
           authenticated: false,
@@ -160,17 +175,26 @@ async function handleMockRequest(config: InternalAxiosRequestConfig) {
   }
 
   if (method === 'GET' && path === '/api/users/me') {
-    const user: UserProfileResponse = {
-      avatarUrl: undefined,
-      bio: 'Always down for coffee, a long walk, or trying somewhere new.',
-      createdAt: now,
-      displayName: 'Mock User',
-      email: 'mock@coze.local',
-      id: MOCK_USER_ID,
-      role: 'USER',
+    return mockResponse(config, 200, currentMockProfile);
+  }
+
+  if (method === 'PUT' && path === '/api/users/update') {
+    const body = requestBody<UserProfileUpdateRequest>(config);
+    const emailTaken = users.some(
+      (candidate) =>
+        candidate.id !== MOCK_USER_ID &&
+        candidate.email.toLowerCase() === body.email.trim().toLowerCase(),
+    );
+    if (emailTaken) return mockResponse(config, 409, { message: 'Email is already registered' });
+    currentMockProfile = {
+      ...currentMockProfile,
+      avatarUrl: body.avatarUrl,
+      bio: body.bio,
+      displayName: body.displayName.trim(),
+      email: body.email.trim().toLowerCase(),
       updatedAt: now,
     };
-    return mockResponse(config, 200, user);
+    return mockResponse(config, 200, currentMockProfile);
   }
 
   if (method === 'GET' && path === '/api/users/friends') {

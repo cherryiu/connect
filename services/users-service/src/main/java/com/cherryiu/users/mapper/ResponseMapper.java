@@ -4,6 +4,7 @@ import com.cherryiu.users.dto.AuthStatusResponse;
 import com.cherryiu.users.dto.FriendProfileResponse;
 import com.cherryiu.users.dto.UserProfileRequest;
 import com.cherryiu.users.dto.UserProfileResponse;
+import com.cherryiu.users.dto.UpdateUserProfileRequest;
 import com.cherryiu.users.model.UserProfile;
 
 import io.quarkus.elytron.security.common.BcryptUtil;
@@ -48,6 +49,17 @@ public class ResponseMapper {
     }
 
     public void applyRequest(UserProfile profile, UserProfileRequest request) {
+        profile.displayName = request.displayName().trim();
+        profile.email = request.email().trim().toLowerCase(Locale.ROOT);
+        if (request.password() != null && !request.password().isBlank()) {
+            profile.password = BcryptUtil.bcryptHash(request.password());
+        }
+        profile.avatarUrl = request.avatarUrl();
+        profile.bio = request.bio();
+        profile.updatedAt = Instant.now();
+    }
+
+    public void applyRequest(UserProfile profile, UpdateUserProfileRequest request) {
         profile.displayName = request.displayName().trim();
         profile.email = request.email().trim().toLowerCase(Locale.ROOT);
         if (request.password() != null && !request.password().isBlank()) {

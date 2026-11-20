@@ -19,6 +19,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { BlurView } from 'expo-blur';
 import { GlassView } from 'expo-glass-effect';
 import { LinearGradient } from 'expo-linear-gradient';
+import DateTimePicker, { type DateType, useDefaultStyles } from 'react-native-ui-datepicker';
 
 import { deleteHangout, getHangoutsForUser, Hangout, joinHangout } from '../api/hangoutsApi';
 import {
@@ -71,8 +72,10 @@ export default function ScrapbookCalendarScreen() {
   const [pendingActionId, setPendingActionId] = useState<string>();
   const [selectedHangout, setSelectedHangout] = useState<Hangout | null>(null);
   const [showAll, setShowAll] = useState(false);
+  const [allHangsLayout, setAllHangsLayout] = useState<'list' | 'grid'>('list');
   const [hangoutSearch, setHangoutSearch] = useState('');
   const [hangoutDateFilter, setHangoutDateFilter] = useState<HangoutDateFilter | null>(null);
+  const [dateFilterModalVisible, setDateFilterModalVisible] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -143,6 +146,7 @@ export default function ScrapbookCalendarScreen() {
     if (showAll) {
       setHangoutSearch('');
       setHangoutDateFilter(null);
+      setDateFilterModalVisible(false);
     }
     setShowAll((current) => !current);
   };
@@ -150,17 +154,6 @@ export default function ScrapbookCalendarScreen() {
   const clearHangoutFilters = () => {
     setHangoutSearch('');
     setHangoutDateFilter(null);
-  };
-
-  const toggleDateFilter = (mode: HangoutDateFilter['mode']) => {
-    setHangoutDateFilter((current) => {
-      const matchesSelection =
-        current?.mode === mode &&
-        (mode === 'day'
-          ? sameDay(current.date, selectedDate)
-          : sameMonth(current.date, selectedDate));
-      return matchesSelection ? null : { date: selectedDate, mode };
-    });
   };
 
   const openHangoutForm = (hangout?: Hangout) => {
@@ -186,7 +179,6 @@ export default function ScrapbookCalendarScreen() {
 
   const selectDay = (date: Date) => {
     setSelectedDate(date);
-    if (showAll) return;
     const dayHangouts = hangoutsByDay[dateKey(date)];
     if (dayHangouts?.length) setSelectedHangout(dayHangouts[0]);
   };
@@ -297,10 +289,31 @@ export default function ScrapbookCalendarScreen() {
             </Pressable>
           </View>
 
-          <Text style={styles.sectionTitle}>
-            <Text style={styles.sparkle}>✧ </Text>
-            {showAll ? 'all hangs...' : 'coming up...'}
-          </Text>
+          <View style={styles.sectionHeadingRow}>
+            <Text style={styles.sectionTitle}>
+              <Text style={styles.sparkle}>✧ </Text>
+              {showAll ? 'all hangs...' : 'coming up...'}
+            </Text>
+            {showAll ? (
+              <Pressable
+                accessibilityLabel={
+                  allHangsLayout === 'list'
+                    ? 'Show hangouts in a two-column grid'
+                    : 'Show hangouts in a list'
+                }
+                accessibilityRole="button"
+                onPress={() =>
+                  setAllHangsLayout((current) => (current === 'list' ? 'grid' : 'list'))
+                }
+                style={({ pressed }) => [
+                  styles.layoutToggle,
+                  pressed && styles.switchButtonPressed,
+                ]}
+              >
+                <LayoutIcon layout={allHangsLayout === 'list' ? 'grid' : 'list'} />
+              </Pressable>
+            ) : null}
+          </View>
 
           {showAll ? (
             <View style={styles.filterPanel}>
@@ -318,42 +331,24 @@ export default function ScrapbookCalendarScreen() {
 
               <View style={styles.filterActionRow}>
                 <Pressable
-                  accessibilityHint="Uses the day selected in the calendar above"
+                  accessibilityHint="Opens date and month filter options"
                   accessibilityRole="button"
-                  onPress={() => toggleDateFilter('day')}
+                  onPress={() => setDateFilterModalVisible(true)}
                   style={({ pressed }) => [
                     styles.dateFilterButton,
-                    hangoutDateFilter?.mode === 'day' && styles.dateFilterButtonActive,
+                    hangoutDateFilter && styles.dateFilterButtonActive,
                     pressed && styles.switchButtonPressed,
                   ]}
                 >
                   <Text
                     style={[
                       styles.dateFilterButtonText,
-                      hangoutDateFilter?.mode === 'day' && styles.dateFilterButtonTextActive,
+                      hangoutDateFilter && styles.dateFilterButtonTextActive,
                     ]}
                   >
-                    DAY: {formatFilterDate(selectedDate)}
-                  </Text>
-                </Pressable>
-
-                <Pressable
-                  accessibilityHint="Uses the month selected in the calendar above"
-                  accessibilityRole="button"
-                  onPress={() => toggleDateFilter('month')}
-                  style={({ pressed }) => [
-                    styles.dateFilterButton,
-                    hangoutDateFilter?.mode === 'month' && styles.dateFilterButtonActive,
-                    pressed && styles.switchButtonPressed,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.dateFilterButtonText,
-                      hangoutDateFilter?.mode === 'month' && styles.dateFilterButtonTextActive,
-                    ]}
-                  >
-                    MONTH: {formatFilterMonth(selectedDate)}
+                    {hangoutDateFilter
+                      ? formatDateFilterLabel(hangoutDateFilter)
+                      : 'FILTER BY DATE'}
                   </Text>
                 </Pressable>
 
@@ -370,10 +365,6 @@ export default function ScrapbookCalendarScreen() {
                   </Pressable>
                 ) : null}
               </View>
-
-              <Text style={styles.dateFilterHint}>
-                Select a calendar day above, then filter by that day or its month.
-              </Text>
             </View>
           ) : null}
 
@@ -385,12 +376,16 @@ export default function ScrapbookCalendarScreen() {
               <Text style={styles.loadingText}>CHECKING THE CALENDAR...</Text>
             </View>
           ) : displayedHangouts.length ? (
-            <View style={styles.cardList}>
+            <View
+              style={[styles.cardList, showAll && allHangsLayout === 'grid' && styles.cardGrid]}
+            >
               {displayedHangouts.map((hangout) => (
                 <HangoutCard
+                  compact={showAll && allHangsLayout === 'grid'}
                   hangout={hangout}
                   key={hangout.id}
                   onPress={() => setSelectedHangout(hangout)}
+                  style={showAll && allHangsLayout === 'grid' ? styles.hangoutGridCard : undefined}
                 />
               ))}
             </View>
@@ -420,6 +415,17 @@ export default function ScrapbookCalendarScreen() {
           }}
           onJoin={joinSelectedHangout}
         />
+
+        {dateFilterModalVisible ? (
+          <DateFilterModal
+            currentFilter={hangoutDateFilter}
+            onApply={(filter) => {
+              setHangoutDateFilter(filter);
+              setDateFilterModalVisible(false);
+            }}
+            onClose={() => setDateFilterModalVisible(false)}
+          />
+        ) : null}
       </View>
 
       {/* <Pressable
@@ -429,6 +435,119 @@ export default function ScrapbookCalendarScreen() {
         <Text style={{ color: 'white', textAlign: 'center' }}>Go to Login Screen</Text>
       </Pressable> */}
     </SafeAreaView>
+  );
+}
+
+function DateFilterModal({
+  currentFilter,
+  onApply,
+  onClose,
+}: {
+  currentFilter: HangoutDateFilter | null;
+  onApply: (filter: HangoutDateFilter) => void;
+  onClose: () => void;
+}) {
+  const { colors, isDarkMode } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const defaultPickerStyles = useDefaultStyles(isDarkMode ? 'dark' : 'light');
+  const [mode, setMode] = useState<HangoutDateFilter['mode']>(currentFilter?.mode ?? 'day');
+  const [date, setDate] = useState<DateType>(currentFilter?.date ?? new Date());
+
+  const applyFilter = () => {
+    const normalizedDate = normalizePickerDate(date);
+    if (normalizedDate) onApply({ date: normalizedDate, mode });
+  };
+
+  return (
+    <Modal animationType="fade" onRequestClose={onClose} transparent visible>
+      <View style={styles.dateModalBackdrop}>
+        <Pressable
+          accessibilityLabel="Close date filter"
+          onPress={onClose}
+          style={StyleSheet.absoluteFill}
+        />
+        <View style={styles.dateModalCard}>
+          <Text style={styles.dateModalTitle}>FILTER HANGS</Text>
+          <Text style={styles.dateModalCopy}>Choose whether to match one day or a full month.</Text>
+
+          <View style={styles.dateModeRow}>
+            {(['day', 'month'] as const).map((option) => (
+              <Pressable
+                accessibilityRole="button"
+                key={option}
+                onPress={() => setMode(option)}
+                style={({ pressed }) => [
+                  styles.dateModeButton,
+                  mode === option && styles.dateModeButtonActive,
+                  pressed && styles.switchButtonPressed,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.dateModeButtonText,
+                    mode === option && styles.dateModeButtonTextActive,
+                  ]}
+                >
+                  {option.toUpperCase()}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
+          <DateTimePicker
+            date={date}
+            mode="single"
+            onChange={({ date: nextDate }) => setDate(nextDate)}
+            styles={{
+              ...defaultPickerStyles,
+              selected: { backgroundColor: colors.tealDark },
+              selected_label: { color: colors.surface, fontFamily: FONTS.primaryBold },
+              today: { borderColor: colors.teal, borderWidth: 1 },
+            }}
+          />
+
+          <View style={styles.dateModalActions}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={onClose}
+              style={({ pressed }) => [styles.dateModalCancel, pressed && styles.promptPressed]}
+            >
+              <Text style={styles.dateModalCancelText}>CANCEL</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={applyFilter}
+              style={({ pressed }) => [styles.dateModalApply, pressed && styles.promptPressed]}
+            >
+              <Text style={styles.dateModalApplyText}>APPLY FILTER</Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function LayoutIcon({ layout }: { layout: 'list' | 'grid' }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
+  if (layout === 'grid') {
+    return (
+      <View style={styles.gridIcon}>
+        {Array.from({ length: 4 }, (_, index) => (
+          <View key={index} style={styles.gridIconCell} />
+        ))}
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.listIcon}>
+      {Array.from({ length: 3 }, (_, index) => (
+        <View key={index} style={styles.listIconLine} />
+      ))}
+    </View>
   );
 }
 
@@ -1005,6 +1124,23 @@ function formatFilterMonth(date: Date) {
   return date.toLocaleDateString(undefined, { month: 'short', year: 'numeric' }).toUpperCase();
 }
 
+function formatDateFilterLabel(filter: HangoutDateFilter) {
+  return filter.mode === 'day'
+    ? `DAY: ${formatFilterDate(filter.date)}`
+    : `MONTH: ${formatFilterMonth(filter.date)}`;
+}
+
+function normalizePickerDate(value: DateType) {
+  if (value == null) return null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  if (typeof value === 'string' || typeof value === 'number') {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  const parsed = value.toDate();
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 function avatarColor(index: number, colors: AppColors) {
   return [colors.coral, '#8B7898', colors.teal, colors.yellow, colors.primary][index % 5];
 }
@@ -1263,11 +1399,11 @@ function createStyles(colors: AppColors) {
       fontSize: 9,
       letterSpacing: 0.5,
     },
-    dateFilterHint: {
-      color: colors.muted,
-      fontFamily: FONTS.secondaryLight,
-      fontSize: 11,
-      marginTop: 8,
+    sectionHeadingRow: {
+      alignItems: 'center',
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginTop: 38,
     },
     sectionTitle: {
       color: colors.black,
@@ -1275,9 +1411,28 @@ function createStyles(colors: AppColors) {
       fontSize: 18,
       fontWeight: '800',
       marginBottom: 16,
-      marginTop: 38,
     },
     sparkle: { color: colors.coral, fontSize: 28 },
+    layoutToggle: {
+      alignItems: 'center',
+      backgroundColor: colors.surface,
+      borderColor: colors.mutedBorder,
+      borderRadius: 16,
+      height: 32,
+      justifyContent: 'center',
+      marginBottom: 16,
+      width: 32,
+    },
+    gridIcon: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 2,
+      height: 12,
+      width: 12,
+    },
+    gridIconCell: { backgroundColor: colors.tealDark, borderRadius: 1, height: 5, width: 5 },
+    listIcon: { gap: 2, width: 13 },
+    listIconLine: { backgroundColor: colors.tealDark, borderRadius: 1, height: 2, width: 13 },
     errorBanner: {
       backgroundColor: 'rgba(156,65,65,0.10)',
       color: colors.primary,
@@ -1324,6 +1479,91 @@ function createStyles(colors: AppColors) {
       letterSpacing: 1.5,
     },
     cardList: { alignItems: 'center' },
+    cardGrid: {
+      alignItems: 'stretch',
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'space-between',
+    },
+    hangoutGridCard: { width: '47.5%' },
+    dateModalBackdrop: {
+      alignItems: 'center',
+      backgroundColor: 'rgba(20,17,15,0.48)',
+      flex: 1,
+      justifyContent: 'center',
+      padding: 18,
+    },
+    dateModalCard: {
+      backgroundColor: colors.surface,
+      borderColor: colors.tealDark,
+      borderRadius: 12,
+      borderWidth: 1.5,
+      maxWidth: 430,
+      padding: 18,
+      width: '100%',
+    },
+    dateModalTitle: {
+      color: colors.black,
+      fontFamily: FONTS.primaryBold,
+      fontSize: 13,
+      letterSpacing: 0.8,
+    },
+    dateModalCopy: {
+      color: colors.muted,
+      fontFamily: FONTS.secondaryLight,
+      fontSize: 13,
+      marginBottom: 14,
+      marginTop: 4,
+    },
+    dateModeRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
+    dateModeButton: {
+      alignItems: 'center',
+      backgroundColor: colors.tealSoft,
+      borderColor: colors.teal,
+      borderRadius: 18,
+      borderWidth: 1,
+      flex: 1,
+      justifyContent: 'center',
+      minHeight: 36,
+    },
+    dateModeButtonActive: { backgroundColor: colors.tealDark },
+    dateModeButtonText: {
+      color: colors.tealDark,
+      fontFamily: FONTS.primaryBold,
+      fontSize: 9,
+      letterSpacing: 0.7,
+    },
+    dateModeButtonTextActive: { color: colors.surface },
+    dateModalActions: { flexDirection: 'row', gap: 8, marginTop: 10 },
+    dateModalCancel: {
+      alignItems: 'center',
+      borderColor: colors.mutedBorder,
+      borderRadius: 19,
+      borderWidth: 1,
+      flex: 1,
+      justifyContent: 'center',
+      minHeight: 40,
+    },
+    dateModalCancelText: {
+      color: colors.muted,
+      fontFamily: FONTS.primaryBold,
+      fontSize: 9,
+      letterSpacing: 0.6,
+    },
+    dateModalApply: {
+      alignItems: 'center',
+      backgroundColor: colors.primary,
+      borderRadius: 19,
+      flex: 1,
+      justifyContent: 'center',
+      minHeight: 40,
+    },
+    dateModalApplyText: {
+      color: colors.surface,
+      fontFamily: FONTS.primaryBold,
+      fontSize: 9,
+      letterSpacing: 0.6,
+    },
     modalBackdrop: {
       alignItems: 'center',
       // backgroundColor: 'rgba(167, 154, 146, 0.42)',

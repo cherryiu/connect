@@ -1,16 +1,18 @@
 import { useMemo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import type { Hangout } from '../../api/hangoutsApi';
 import { FONTS } from '../../constants';
 import { useTheme, type AppColors } from '../../context/ThemeContext';
 
 type Props = {
+  compact?: boolean;
   hangout: Hangout;
   onPress: () => void;
+  style?: StyleProp<ViewStyle>;
 };
 
-export default function HangoutCard({ hangout, onPress }: Props) {
+export default function HangoutCard({ compact = false, hangout, onPress, style }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const hasPassed = Date.parse(hangout.endTime) < Date.now();
@@ -19,14 +21,14 @@ export default function HangoutCard({ hangout, onPress }: Props) {
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
-      style={[styles.card, hasPassed && styles.passedCard]}
+      style={[styles.card, compact && styles.compactCard, hasPassed && styles.passedCard, style]}
     >
       <View style={styles.badgeRow}>
-        <HangoutDateBadge startTime={hangout.startTime} />
-        <HangoutPassedBadge endTime={hangout.endTime} />
-        <HangoutUpcomingBadge startTime={hangout.startTime} />
+        <HangoutDateBadge compact={compact} startTime={hangout.startTime} />
+        <HangoutPassedBadge compact={compact} endTime={hangout.endTime} />
+        <HangoutUpcomingBadge compact={compact} startTime={hangout.startTime} />
       </View>
-      <Text numberOfLines={1} style={styles.title}>
+      <Text numberOfLines={compact ? 2 : 1} style={[styles.title, compact && styles.compactTitle]}>
         {hangout.hangoutName}
       </Text>
       <View style={styles.detailsRow}>
@@ -37,30 +39,56 @@ export default function HangoutCard({ hangout, onPress }: Props) {
           </Text>
           <Text style={styles.metadata}>ツ HOSTED BY YOU</Text>
         </View>
-        <AvatarStack count={hangout.participantAuthUserIds.length} />
+        {!compact ? <AvatarStack count={hangout.participantAuthUserIds.length} /> : null}
       </View>
     </Pressable>
   );
 }
 
-export function HangoutDateBadge({ startTime }: { startTime: string }) {
+export function HangoutDateBadge({
+  compact = false,
+  startTime,
+}: {
+  compact?: boolean;
+  startTime: string;
+}) {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  return <Text style={styles.dateBadge}>{formatDateBadge(startTime)}</Text>;
+  return (
+    <Text style={[styles.dateBadge, compact && styles.compactBadge]}>
+      {formatDateBadge(startTime)}
+    </Text>
+  );
 }
 
-export function HangoutPassedBadge({ endTime }: { endTime: string }) {
+export function HangoutPassedBadge({
+  compact = false,
+  endTime,
+}: {
+  compact?: boolean;
+  endTime: string;
+}) {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   if (Date.parse(endTime) >= Date.now()) return null;
-  return <Text style={styles.passedBadge}>HANGOUT PASSED</Text>;
+  return (
+    <Text style={[styles.passedBadge, compact && styles.compactStatusBadge]}>HANGOUT PASSED</Text>
+  );
 }
 
-export function HangoutUpcomingBadge({ startTime }: { startTime: string }) {
+export function HangoutUpcomingBadge({
+  compact = false,
+  startTime,
+}: {
+  compact?: boolean;
+  startTime: string;
+}) {
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const label = formatUpcomingLabel(startTime);
-  return label ? <Text style={styles.upcomingBadge}>{label}</Text> : null;
+  return label ? (
+    <Text style={[styles.upcomingBadge, compact && styles.compactStatusBadge]}>{label}</Text>
+  ) : null;
 }
 
 export function formatUpcomingLabel(startTime: string, nowTimestamp = Date.now()) {
@@ -134,6 +162,10 @@ function createStyles(colors: AppColors) {
       shadowRadius: 0,
       width: '76%',
     },
+    compactCard: {
+      padding: 10,
+      shadowOffset: { height: 3, width: 3 },
+    },
     passedCard: {
       borderColor: colors.muted,
       shadowColor: colors.muted,
@@ -155,6 +187,7 @@ function createStyles(colors: AppColors) {
       paddingHorizontal: 8,
       paddingVertical: 5,
     },
+    compactBadge: { fontSize: 8, paddingHorizontal: 5, paddingVertical: 4 },
     passedBadge: {
       backgroundColor: 'rgba(156,65,65,0.12)',
       borderColor: colors.primary,
@@ -177,6 +210,7 @@ function createStyles(colors: AppColors) {
       paddingHorizontal: 8,
       paddingVertical: 6,
     },
+    compactStatusBadge: { fontSize: 7, paddingHorizontal: 5, paddingVertical: 4 },
     title: {
       color: colors.black,
       fontFamily: FONTS.secondary,
@@ -185,6 +219,7 @@ function createStyles(colors: AppColors) {
       marginTop: 8,
       // textTransform: 'lowercase',
     },
+    compactTitle: { fontSize: 18, lineHeight: 20 },
     detailsRow: {
       alignItems: 'flex-start',
       flexDirection: 'row',

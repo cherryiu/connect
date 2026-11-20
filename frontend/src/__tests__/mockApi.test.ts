@@ -15,7 +15,13 @@ import {
   updateLocationVisitJournal,
   updateStandaloneLocationOrder,
 } from '../api/locationApi';
-import { addFriend, getFriends, searchUsers } from '../api/usersApi';
+import {
+  addFriend,
+  getCurrentUser,
+  getFriends,
+  searchUsers,
+  updateCurrentUser,
+} from '../api/usersApi';
 
 describe('in-memory API', () => {
   test('authenticates and retains a newly created hangout for the current session', async () => {
@@ -24,6 +30,25 @@ describe('in-memory API', () => {
 
     expect(auth.authenticated).toBe(true);
     expect(auth.authUserId).toBe('mock-user-1');
+
+    await expect(
+      updateCurrentUser({
+        avatarUrl: 'data:image/png;base64,YQ==',
+        bio: 'Updated profile bio.',
+        displayName: 'Updated Mock User',
+        email: 'mock@coze.local',
+        role: 'USER',
+      }),
+    ).resolves.toMatchObject({
+      avatarUrl: 'data:image/png;base64,YQ==',
+      bio: 'Updated profile bio.',
+      displayName: 'Updated Mock User',
+    });
+    await expect(getCurrentUser()).resolves.toMatchObject({ displayName: 'Updated Mock User' });
+    await expect(getAuthStatus()).resolves.toMatchObject({
+      avatarUrl: 'data:image/png;base64,YQ==',
+      displayName: 'Updated Mock User',
+    });
 
     const friends = await getFriends();
     expect(friends).toHaveLength(4);

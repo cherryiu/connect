@@ -3,11 +3,36 @@
     "name": "MyApp",
     "slug": "MyApp",
     "version": "1.0.0",
+    "icon": "./assets/app-icon-light.png",
     "ios": {
-      "bundleIdentifier": "com.anonymous.MyApp"
+      "bundleIdentifier": "com.anonymous.MyApp",
+      "icon": "./assets/app-icon-light.png"
     },
     "plugins": [
-      "expo-font"
+      "expo-font",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": false,
+          "microphonePermission": false,
+          "photosPermission": "Allow Coze to choose a profile photo."
+        }
+      ],
+      [
+        "expo-awesome-app-icon",
+        {
+          "icons": {
+            "dark": {
+              "android": {
+                "image": "./assets/app-icon-dark.png"
+              },
+              "ios": {
+                "light": "./assets/app-icon-dark.png"
+              }
+            }
+          }
+        }
+      ]
     ],
     "android": {
       "package": "com.anonymous.MyApp"

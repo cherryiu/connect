@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
@@ -6,13 +6,15 @@ import {
   Alert,
   Image,
   Modal,
+  Platform,
   Pressable,
   StyleSheet,
   Switch,
   Text,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getAppIconState, setAppIcon, supportsAlternateIcons } from 'expo-awesome-app-icon';
 
 import { IMAGES, FONTS } from '../../constants';
 import { useTheme, type AppColors } from '../../context/ThemeContext';
@@ -27,10 +29,23 @@ type MenuNavigation = NativeStackNavigationProp<RootStackParamList, 'ViewProfile
 
 export default function TopBar({ avatarUrl, onLogout }: TopBarProps) {
   const navigation = useNavigation<MenuNavigation>();
+  const insets = useSafeAreaInsets();
   const { colors, isDarkMode, setDarkMode } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [darkAppIcon, setDarkAppIcon] = useState(false);
+  const [changingAppIcon, setChangingAppIcon] = useState(false);
+
+  useEffect(() => {
+    if (!sidebarOpen) return;
+    try {
+      setDarkAppIcon(getAppIconState().selected === 'dark');
+    } catch {
+      // Alternate icons are unavailable in Expo Go and before a native rebuild.
+      setDarkAppIcon(false);
+    }
+  }, [sidebarOpen]);
 
   const logout = async () => {
     try {
@@ -49,6 +64,25 @@ export default function TopBar({ avatarUrl, onLogout }: TopBarProps) {
   const openSettings = () => {
     setSidebarOpen(false);
     Alert.alert('App settings', 'Settings controls will be added here next.');
+  };
+
+  const changeAppIcon = async (useDarkIcon: boolean) => {
+    try {
+      if (!supportsAlternateIcons()) {
+        Alert.alert('App icon unavailable', 'Rebuild the native app to enable alternate icons.');
+        return;
+      }
+      setChangingAppIcon(true);
+      await setAppIcon(
+        useDarkIcon ? 'dark' : null,
+        Platform.OS === 'android' ? { deferUntilBackground: true } : undefined,
+      );
+      setDarkAppIcon(useDarkIcon);
+    } catch {
+      Alert.alert('Icon could not be changed', 'Please try again after restarting the app.');
+    } finally {
+      setChangingAppIcon(false);
+    }
   };
 
   return (
@@ -91,7 +125,15 @@ export default function TopBar({ avatarUrl, onLogout }: TopBarProps) {
             style={styles.backdrop}
           />
 
-          <SafeAreaView style={styles.sidebar}>
+          <View
+            style={[
+              styles.sidebar,
+              {
+                marginBottom: Math.max(insets.bottom, 8),
+                marginTop: Math.max(insets.top, 8),
+              },
+            ]}
+          >
             <View style={styles.sidebarHeading}>
               <View style={styles.sidebarBrandRow}>
                 <Text style={styles.sidebarBrand}>COZE</Text>
@@ -112,7 +154,9 @@ export default function TopBar({ avatarUrl, onLogout }: TopBarProps) {
               onPress={openSettings}
               style={({ pressed }) => [styles.menuItem, pressed && styles.menuItemPressed]}
             >
-              <Text style={styles.menuItemIcon}>⚙</Text>
+              <View style={styles.menuItemIconContainer}>
+                <SettingsGearIcon />
+              </View>
               <Text style={styles.menuItemText}>APP SETTINGS</Text>
               <Text style={styles.menuItemArrow}>→</Text>
             </Pressable>
@@ -126,6 +170,26 @@ export default function TopBar({ avatarUrl, onLogout }: TopBarProps) {
                 trackColor={{ false: '#cfc6bd', true: colors.teal }}
                 value={isDarkMode}
               />
+            </View>
+            <View style={styles.menuItem}>
+              <View style={styles.menuItemIconContainer}>
+                <View style={styles.appIconGlyph}>
+                  <View style={styles.appIconGlyphLight} />
+                  <View style={styles.appIconGlyphDark} />
+                </View>
+              </View>
+              <Text style={styles.menuItemText}>DARK APP ICON</Text>
+              {changingAppIcon ? (
+                <ActivityIndicator color={colors.tealDark} size="small" />
+              ) : (
+                <Switch
+                  accessibilityLabel="Dark app icon"
+                  onValueChange={(value) => void changeAppIcon(value)}
+                  thumbColor={darkAppIcon ? colors.surface : '#fffaf5'}
+                  trackColor={{ false: '#cfc6bd', true: colors.teal }}
+                  value={darkAppIcon}
+                />
+              )}
             </View>
 
             <View style={styles.sidebarSpacer} />
@@ -141,9 +205,32 @@ export default function TopBar({ avatarUrl, onLogout }: TopBarProps) {
                 <Text style={styles.logoutText}>LOG OUT</Text>
               )}
             </Pressable>
-          </SafeAreaView>
+          </View>
         </View>
       </Modal>
+    </View>
+  );
+}
+
+function SettingsGearIcon() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
+  return (
+    <View
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      style={styles.gearIcon}
+    >
+      {[0, 45, 90, 135].map((rotation) => (
+        <View
+          key={rotation}
+          style={[styles.gearTooth, { transform: [{ rotate: `${rotation}deg` }] }]}
+        />
+      ))}
+      <View style={styles.gearRing}>
+        <View style={styles.gearCenter} />
+      </View>
     </View>
   );
 }
@@ -189,11 +276,18 @@ function createStyles(colors: AppColors) {
       borderRadius: 20,
     },
     pressed: { opacity: 0.55 },
-    modalRoot: { flex: 1, flexDirection: 'row' },
+    modalRoot: {
+      backgroundColor: 'rgba(10,8,7,0.48)',
+      flex: 1,
+      flexDirection: 'row',
+    },
     sidebar: {
       backgroundColor: colors.background,
       borderLeftColor: colors.teal,
       borderLeftWidth: 1.5,
+      borderBottomLeftRadius: 12,
+      borderTopLeftRadius: 12,
+      overflow: 'hidden',
       paddingHorizontal: 20,
       shadowColor: '#000',
       shadowOffset: { height: 0, width: -5 },
@@ -202,7 +296,7 @@ function createStyles(colors: AppColors) {
       width: '78%',
       zIndex: 2,
     },
-    backdrop: { backgroundColor: 'rgba(10,8,7,0.48)', flex: 1 },
+    backdrop: { flex: 1 },
     sidebarHeading: {
       alignItems: 'center',
       borderBottomColor: 'rgba(132,165,157,0.32)',
@@ -237,6 +331,53 @@ function createStyles(colors: AppColors) {
     },
     menuItemPressed: { backgroundColor: 'rgba(132,165,157,0.12)', opacity: 0.7 },
     menuItemIcon: { color: colors.tealDark, fontSize: 18, marginRight: 12 },
+    menuItemIconContainer: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 12,
+      width: 20,
+    },
+    gearIcon: { height: 20, position: 'relative', width: 20 },
+    gearTooth: {
+      backgroundColor: colors.tealDark,
+      borderRadius: 1,
+      height: 3,
+      left: 0,
+      position: 'absolute',
+      top: 8.5,
+      width: 20,
+    },
+    gearRing: {
+      alignItems: 'center',
+      backgroundColor: colors.background,
+      borderColor: colors.tealDark,
+      borderRadius: 7,
+      borderWidth: 2,
+      height: 14,
+      justifyContent: 'center',
+      left: 3,
+      position: 'absolute',
+      top: 3,
+      width: 14,
+    },
+    gearCenter: {
+      borderColor: colors.tealDark,
+      borderRadius: 2,
+      borderWidth: 1.5,
+      height: 4,
+      width: 4,
+    },
+    appIconGlyph: {
+      borderColor: colors.tealDark,
+      borderRadius: 5,
+      borderWidth: 1,
+      flexDirection: 'row',
+      height: 20,
+      overflow: 'hidden',
+      width: 20,
+    },
+    appIconGlyphLight: { backgroundColor: '#FBF5EF', flex: 1 },
+    appIconGlyphDark: { backgroundColor: '#1E1B19', flex: 1 },
     menuItemText: {
       color: colors.black,
       flex: 1,

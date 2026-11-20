@@ -2,15 +2,18 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as ImagePicker from 'expo-image-picker';
 import {
   ActivityIndicator,
   Alert,
   Image,
+  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -25,8 +28,10 @@ import {
   getCurrentUser,
   deleteCurrentUser,
   getFriends,
+  updateCurrentUser,
   type FriendProfile,
   type UserProfileResponse,
+  type UserProfileUpdateRequest,
 } from '../api/usersApi';
 import { FONTS } from '../constants';
 import { useAuth } from '../context/AuthContext';
@@ -37,7 +42,7 @@ type ProfileNavigation = NativeStackNavigationProp<RootStackParamList, 'ViewProf
 
 export default function ViewProfileScreen() {
   const navigation = useNavigation<ProfileNavigation>();
-  const { isLoading: authLoading, isLoggedIn, logout, user } = useAuth();
+  const { isLoading: authLoading, isLoggedIn, logout, refreshAuthStatus, user } = useAuth();
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [profile, setProfile] = useState<UserProfileResponse>();
@@ -47,7 +52,8 @@ export default function ViewProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showFriends, setShowFriends] = useState(false);
-  const [editMessageVisible, setEditMessageVisible] = useState(false);
+  const [editProfileVisible, setEditProfileVisible] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [error, setError] = useState<string>();
   const [deletingAccount, setDeletingAccount] = useState(false);
 
@@ -131,6 +137,33 @@ export default function ViewProfileScreen() {
     ]);
   };
 
+  const saveProfile = async (request: UserProfileUpdateRequest) => {
+    const updated = await updateCurrentUser(request);
+    setProfile(updated);
+    await refreshAuthStatus();
+  };
+
+  const uploadAvatar = async () => {
+    if (!profile) return;
+    const selectedImage = await selectProfileImage();
+    if (!selectedImage) return;
+    try {
+      setError(undefined);
+      setUploadingAvatar(true);
+      await saveProfile({
+        avatarUrl: selectedImage,
+        bio: profile.bio,
+        displayName: profile.displayName,
+        email: profile.email,
+        role: 'USER',
+      });
+    } catch {
+      setError('Your profile picture could not be updated. Please try again.');
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safeArea} testID="profile-screen">
       <View style={styles.screen}>
@@ -164,18 +197,34 @@ export default function ViewProfileScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.summaryRow}>
-            {avatarUrl ? (
-              <Image source={{ uri: avatarUrl }} style={styles.avatar} />
-            ) : (
-              <LinearGradient
-                colors={[colors.yellow, colors.coral, colors.teal]}
-                end={{ x: 1, y: 1 }}
-                start={{ x: 0, y: 0 }}
-                style={styles.avatar}
-              >
-                <Text style={styles.avatarText}>{initials(displayName)}</Text>
-              </LinearGradient>
-            )}
+            <Pressable
+              accessibilityHint="Opens your photo library"
+              accessibilityLabel="Change profile picture"
+              accessibilityRole="button"
+              disabled={loading || uploadingAvatar}
+              onPress={() => void uploadAvatar()}
+              style={({ pressed }) => [styles.avatarButton, pressed && styles.pressed]}
+            >
+              {avatarUrl ? (
+                <Image source={{ uri: avatarUrl }} style={styles.avatar} />
+              ) : (
+                <LinearGradient
+                  colors={[colors.yellow, colors.coral, colors.teal]}
+                  end={{ x: 1, y: 1 }}
+                  start={{ x: 0, y: 0 }}
+                  style={styles.avatar}
+                >
+                  <Text style={styles.avatarText}>{initials(displayName)}</Text>
+                </LinearGradient>
+              )}
+              <View style={styles.avatarEditBadge}>
+                {uploadingAvatar ? (
+                  <ActivityIndicator color={colors.surface} size="small" />
+                ) : (
+                  <Text style={styles.avatarEditBadgeText}>＋</Text>
+                )}
+              </View>
+            </Pressable>
 
             <View style={styles.stats}>
               <Text style={styles.statsTitle}>Stats</Text>
@@ -215,18 +264,13 @@ export default function ViewProfileScreen() {
               </Text>
             </Pressable>
             <Pressable
-              accessibilityHint="Shows the placeholder for the upcoming edit profile flow"
               accessibilityRole="button"
-              onPress={() => setEditMessageVisible((visible) => !visible)}
+              onPress={() => setEditProfileVisible(true)}
               style={({ pressed }) => [styles.secondaryAction, pressed && styles.pressed]}
             >
               <Text style={styles.secondaryActionText}>EDIT PROFILE</Text>
             </Pressable>
           </View>
-
-          {editMessageVisible ? (
-            <Text style={styles.editMessage}>PROFILE EDITING CAN BE CONNECTED HERE NEXT.</Text>
-          ) : null}
 
           {showFriends ? <FriendsPanel friends={friends} /> : null}
 
@@ -241,9 +285,181 @@ export default function ViewProfileScreen() {
             </Text>
           </Pressable>
         </ScrollView>
+
+        {editProfileVisible && profile ? (
+          <EditProfileModal
+            onClose={() => setEditProfileVisible(false)}
+            onSave={async (request) => {
+              await saveProfile(request);
+              setEditProfileVisible(false);
+            }}
+            profile={profile}
+          />
+        ) : null}
       </View>
     </SafeAreaView>
   );
+}
+
+function EditProfileModal({
+  onClose,
+  onSave,
+  profile,
+}: {
+  onClose: () => void;
+  onSave: (request: UserProfileUpdateRequest) => Promise<void>;
+  profile: UserProfileResponse;
+}) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const [avatarUrl, setAvatarUrl] = useState(profile.avatarUrl);
+  const [bio, setBio] = useState(profile.bio ?? '');
+  const [displayName, setDisplayName] = useState(profile.displayName);
+  const [error, setError] = useState<string>();
+  const [saving, setSaving] = useState(false);
+
+  const choosePhoto = async () => {
+    const selectedImage = await selectProfileImage();
+    if (selectedImage) setAvatarUrl(selectedImage);
+  };
+
+  const submit = async () => {
+    if (!displayName.trim()) {
+      setError('DISPLAY NAME IS REQUIRED.');
+      return;
+    }
+    try {
+      setError(undefined);
+      setSaving(true);
+      await onSave({
+        avatarUrl,
+        bio: bio.trim() || undefined,
+        displayName: displayName.trim(),
+        email: profile.email,
+        role: 'USER',
+      });
+    } catch {
+      setError('YOUR PROFILE COULD NOT BE SAVED.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal animationType="fade" onRequestClose={onClose} transparent visible>
+      <Pressable
+        accessibilityLabel="Close profile editor"
+        onPress={onClose}
+        style={styles.editorBackdrop}
+      >
+        <Pressable onPress={(event) => event.stopPropagation()} style={styles.editorCard}>
+          <Text style={styles.editorTitle}>EDIT PROFILE</Text>
+
+          <Pressable
+            accessibilityLabel="Choose a profile picture"
+            accessibilityRole="button"
+            onPress={() => void choosePhoto()}
+            style={({ pressed }) => [styles.editorAvatarButton, pressed && styles.pressed]}
+          >
+            {avatarUrl ? (
+              <Image source={{ uri: avatarUrl }} style={styles.editorAvatar} />
+            ) : (
+              <LinearGradient
+                colors={[colors.yellow, colors.coral, colors.teal]}
+                end={{ x: 1, y: 1 }}
+                start={{ x: 0, y: 0 }}
+                style={styles.editorAvatar}
+              >
+                <Text style={styles.editorAvatarText}>{initials(displayName)}</Text>
+              </LinearGradient>
+            )}
+            <Text style={styles.changePhotoText}>CHANGE PHOTO</Text>
+          </Pressable>
+
+          <Text style={styles.editorInputLabel}>DISPLAY NAME</Text>
+          <TextInput
+            maxLength={80}
+            onChangeText={setDisplayName}
+            placeholder="Your name"
+            placeholderTextColor={colors.placeholder}
+            style={styles.editorInput}
+            value={displayName}
+          />
+
+          <Text style={styles.editorInputLabel}>BIO</Text>
+          <TextInput
+            maxLength={500}
+            multiline
+            onChangeText={setBio}
+            placeholder="Tell your friends about yourself"
+            placeholderTextColor={colors.placeholder}
+            style={[styles.editorInput, styles.editorBioInput]}
+            textAlignVertical="top"
+            value={bio}
+          />
+
+          {error ? <Text style={styles.editorError}>{error}</Text> : null}
+          <View style={styles.editorActions}>
+            <Pressable
+              accessibilityRole="button"
+              disabled={saving}
+              onPress={onClose}
+              style={({ pressed }) => [styles.editorCancel, pressed && styles.pressed]}
+            >
+              <Text style={styles.editorCancelText}>CANCEL</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              disabled={saving}
+              onPress={() => void submit()}
+              style={({ pressed }) => [styles.editorSave, pressed && styles.pressed]}
+            >
+              {saving ? (
+                <ActivityIndicator color={colors.surface} size="small" />
+              ) : (
+                <Text style={styles.editorSaveText}>SAVE PROFILE</Text>
+              )}
+            </Pressable>
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+async function selectProfileImage() {
+  const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  if (!permission.granted) {
+    Alert.alert(
+      'Photo access needed',
+      'Allow photo library access in Settings to choose a profile picture.',
+    );
+    return null;
+  }
+
+  const result = await ImagePicker.launchImageLibraryAsync({
+    allowsEditing: true,
+    aspect: [1, 1],
+    base64: true,
+    mediaTypes: ['images'],
+    quality: 0.55,
+  });
+  if (result.canceled) return null;
+
+  const asset = result.assets[0];
+  if (!asset?.base64) {
+    Alert.alert('Photo unavailable', 'This photo could not be read. Please choose another one.');
+    return null;
+  }
+  const supportedMimeType = ['image/jpeg', 'image/png', 'image/webp'].includes(asset.mimeType ?? '')
+    ? asset.mimeType
+    : 'image/jpeg';
+  const dataUri = `data:${supportedMimeType};base64,${asset.base64}`;
+  if (dataUri.length > 4_000_000) {
+    Alert.alert('Photo too large', 'Choose a smaller photo and try again.');
+    return null;
+  }
+  return dataUri;
 }
 
 function PlacesVisitedBox({
@@ -379,6 +595,7 @@ function createStyles(colors: AppColors) {
     headerSpacer: { width: 22 },
     content: { paddingBottom: 64, paddingHorizontal: 22, paddingTop: 32 },
     summaryRow: { alignItems: 'center', flexDirection: 'row', marginBottom: 18 },
+    avatarButton: { marginRight: 18, position: 'relative' },
     avatar: {
       alignItems: 'center',
       borderColor: 'rgba(255,255,255,0.65)',
@@ -386,11 +603,29 @@ function createStyles(colors: AppColors) {
       borderWidth: 1,
       height: 100,
       justifyContent: 'center',
-      marginRight: 18,
       overflow: 'hidden',
       width: 100,
     },
     avatarText: { color: '#fff', fontFamily: FONTS.secondaryLight, fontSize: 40 },
+    avatarEditBadge: {
+      alignItems: 'center',
+      backgroundColor: colors.tealDark,
+      borderColor: colors.background,
+      borderRadius: 15,
+      borderWidth: 2,
+      bottom: 0,
+      height: 30,
+      justifyContent: 'center',
+      position: 'absolute',
+      right: 0,
+      width: 30,
+    },
+    avatarEditBadgeText: {
+      color: colors.surface,
+      fontFamily: FONTS.primaryBold,
+      fontSize: 18,
+      lineHeight: 20,
+    },
     stats: { flex: 1 },
     statsTitle: {
       color: colors.black,
@@ -486,13 +721,103 @@ function createStyles(colors: AppColors) {
       textAlign: 'center',
     },
     pressed: { opacity: 0.58 },
-    editMessage: {
-      color: colors.muted,
-      fontFamily: FONTS.primary,
+    editorBackdrop: {
+      alignItems: 'center',
+      backgroundColor: 'rgba(20,17,15,0.48)',
+      flex: 1,
+      justifyContent: 'center',
+      padding: 18,
+    },
+    editorCard: {
+      backgroundColor: colors.surface,
+      borderColor: colors.tealDark,
+      borderRadius: 12,
+      borderWidth: 1.5,
+      maxWidth: 430,
+      padding: 18,
+      width: '100%',
+    },
+    editorTitle: {
+      color: colors.black,
+      fontFamily: FONTS.primaryBold,
+      fontSize: 13,
+      letterSpacing: 0.9,
+      marginBottom: 14,
+    },
+    editorAvatarButton: { alignItems: 'center', alignSelf: 'center', marginBottom: 18 },
+    editorAvatar: {
+      alignItems: 'center',
+      borderColor: colors.teal,
+      borderRadius: 42,
+      borderWidth: 1.5,
+      height: 84,
+      justifyContent: 'center',
+      overflow: 'hidden',
+      width: 84,
+    },
+    editorAvatarText: { color: '#fff', fontFamily: FONTS.secondaryLight, fontSize: 32 },
+    changePhotoText: {
+      color: colors.tealDark,
+      fontFamily: FONTS.primaryBold,
       fontSize: 9,
-      letterSpacing: 0.5,
-      marginTop: 10,
-      textAlign: 'right',
+      letterSpacing: 0.6,
+      marginTop: 7,
+    },
+    editorInputLabel: {
+      color: colors.tealDark,
+      fontFamily: FONTS.primaryBold,
+      fontSize: 9,
+      letterSpacing: 0.7,
+      marginBottom: 6,
+    },
+    editorInput: {
+      backgroundColor: colors.background,
+      borderColor: colors.teal,
+      borderWidth: 1,
+      color: colors.black,
+      fontFamily: FONTS.secondaryLight,
+      fontSize: 15,
+      marginBottom: 14,
+      minHeight: 44,
+      paddingHorizontal: 11,
+      paddingVertical: 9,
+    },
+    editorBioInput: { minHeight: 92 },
+    editorError: {
+      color: colors.primary,
+      fontFamily: FONTS.primaryBold,
+      fontSize: 9,
+      marginBottom: 10,
+    },
+    editorActions: { flexDirection: 'row', gap: 8 },
+    editorCancel: {
+      alignItems: 'center',
+      borderColor: colors.mutedBorder,
+      borderRadius: 20,
+      borderWidth: 1,
+      flex: 1,
+      justifyContent: 'center',
+      minHeight: 42,
+    },
+    editorCancelText: {
+      color: colors.muted,
+      fontFamily: FONTS.primaryBold,
+      fontSize: 9,
+      letterSpacing: 0.6,
+    },
+    editorSave: {
+      alignItems: 'center',
+      backgroundColor: colors.primary,
+      borderRadius: 20,
+      flex: 1,
+      justifyContent: 'center',
+      minHeight: 42,
+    },
+    editorSaveText: {
+      color: colors.surface,
+      fontFamily: FONTS.primaryBold,
+      fontSize: 9,
+      letterSpacing: 0.6,
     },
     friendsSection: { marginTop: 30 },
     sectionLabel: {

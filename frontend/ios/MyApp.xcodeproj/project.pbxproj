@@ -333,6 +333,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 9B8666330656BA86999215CC /* Pods-MyApp.debug.xcconfig */;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = AwesomeAppIconDark;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = MyApp/MyApp.entitlements;
@@ -369,6 +370,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 013DFD6D8568AF422C875B53 /* Pods-MyApp.release.xcconfig */;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = AwesomeAppIconDark;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = MyApp/MyApp.entitlements;

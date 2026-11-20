@@ -3,6 +3,7 @@ package com.cherryiu.users.api;
 import com.cherryiu.users.businesslogic.UserBusinessLogic;
 import com.cherryiu.users.dto.UserProfileRequest;
 import com.cherryiu.users.dto.UserProfileResponse;
+import com.cherryiu.users.dto.UpdateUserProfileRequest;
 import io.quarkus.security.UnauthorizedException;
 import io.quarkus.security.identity.SecurityIdentity;
 import jakarta.annotation.security.PermitAll;
@@ -82,7 +83,7 @@ public class UserResource {
     @PUT
     @Path("/update")
     @Operation(summary = "Update the current user profile")
-    public UserProfileResponse updateProfile(@Valid UserProfileRequest request) {
+    public UserProfileResponse updateProfile(@Valid UpdateUserProfileRequest request) {
         return userBusinessLogic.updateProfile(currentUserId(), request);
     }
 

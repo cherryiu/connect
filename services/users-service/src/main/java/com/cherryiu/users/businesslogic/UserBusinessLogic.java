@@ -3,6 +3,7 @@ package com.cherryiu.users.businesslogic;
 import com.cherryiu.users.dto.FriendProfileResponse;
 import com.cherryiu.users.dto.UserProfileRequest;
 import com.cherryiu.users.dto.UserProfileResponse;
+import com.cherryiu.users.dto.UpdateUserProfileRequest;
 import com.cherryiu.users.exception.UserNotFoundException;
 import com.cherryiu.users.mapper.ResponseMapper;
 import com.cherryiu.users.model.UserProfile;
@@ -47,7 +48,7 @@ public class UserBusinessLogic {
         return responseMapper.toUserResponse(profile);
     }
 
-    public UserProfileResponse updateProfile(String userId, UserProfileRequest request) {
+    public UserProfileResponse updateProfile(String userId, UpdateUserProfileRequest request) {
         UserProfile profile = findProfileOrThrow(userId);
         String email = normalizeEmail(request.email());
         boolean emailTaken = userProfileRepository.findByEmail(email)
